@@ -1,0 +1,19 @@
+FROM denoland/deno:latest
+
+WORKDIR /app
+
+# Copy application files
+COPY main.ts .
+COPY deno.json .
+COPY deno.lock .
+COPY middleware.ts .
+COPY routes.ts .
+
+# Cache the dependencies
+RUN deno cache main.ts
+
+# Expose the port
+EXPOSE 3323
+
+# Start the server
+CMD ["deno", "run", "--allow-net", "main.ts"]

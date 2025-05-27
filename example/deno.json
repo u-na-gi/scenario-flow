@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "dev": "deno run --watch main.ts",
+    "test": "deno run --allow-read --allow-run --allow-net ../scenario-flow-cli/main.ts ."
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1"
+  }
+}
