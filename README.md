@@ -32,7 +32,7 @@ Add the library to your project's `deno.json`:
 Install the CLI tool globally:
 
 ```bash
-deno install --global --allow-read --allow-run --allow-net -n sfcli https://raw.githubusercontent.com/u-na-gi/scenario-flow/main/scenario-flow-cli/main.ts
+deno install --global -A -n sfcli https://raw.githubusercontent.com/u-na-gi/scenario-flow/main/scenario-flow-cli/main.ts
 ```
 
 ## Usage

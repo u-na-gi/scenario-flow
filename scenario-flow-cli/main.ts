@@ -63,7 +63,7 @@ async function executeScenarioFile(filePath: string): Promise<boolean> {
     console.log(`Executing: ${filePath}`);
 
     const process = new Deno.Command("deno", {
-      args: ["run", "-A", filePath],
+      args: ["run", "--allow-net", "--allow-env", filePath],
       stdout: "inherit",
       stderr: "inherit",
     });
