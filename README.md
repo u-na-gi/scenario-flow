@@ -194,7 +194,7 @@ The test suite includes:
 Test files are located in:
 
 - `scenario-flow/core/__tests__/` - Core library tests
-- `scenario-flow-cli/main_test.ts` - CLI functionality tests
+- `scenario-flow-cli/__tests__/main_test.ts` - CLI functionality tests
 
 ## Development
 
