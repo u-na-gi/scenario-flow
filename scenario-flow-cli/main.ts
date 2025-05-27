@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-run
 
-import { join, resolve } from "https://deno.land/std@0.204.0/path/mod.ts";
+import { resolve } from "https://deno.land/std@0.204.0/path/mod.ts";
 import { walk } from "https://deno.land/std@0.204.0/fs/walk.ts";
 
 /**
@@ -34,17 +34,19 @@ EXAMPLES:
  */
 async function findScenarioFiles(directory: string): Promise<string[]> {
   const scenarioFiles: string[] = [];
-  
+
   try {
     const resolvedPath = resolve(directory);
-    
-    for await (const entry of walk(resolvedPath, {
-      exts: [".sf.ts"],
-      includeDirs: false,
-    })) {
+
+    for await (
+      const entry of walk(resolvedPath, {
+        exts: [".sf.ts"],
+        includeDirs: false,
+      })
+    ) {
       scenarioFiles.push(entry.path);
     }
-    
+
     return scenarioFiles;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -59,15 +61,15 @@ async function findScenarioFiles(directory: string): Promise<string[]> {
 async function executeScenarioFile(filePath: string): Promise<boolean> {
   try {
     console.log(`Executing: ${filePath}`);
-    
+
     const process = new Deno.Command("deno", {
-      args: ["run", "--allow-net", filePath],
+      args: ["run", "-A", filePath],
       stdout: "inherit",
       stderr: "inherit",
     });
-    
+
     const { code } = await process.output();
-    
+
     if (code === 0) {
       console.log(`Successfully executed: ${filePath}`);
       return true;
@@ -87,42 +89,42 @@ async function executeScenarioFile(filePath: string): Promise<boolean> {
  */
 async function main(): Promise<void> {
   const args = Deno.args;
-  
+
   // Handle help flag
   if (args.includes("-h") || args.includes("--help")) {
     printHelp();
     return;
   }
-  
+
   // Determine the directory to search
-  const directory = args.length > 0 && !args[0].startsWith("-") 
-    ? args[0] 
-    : ".";
-  
+  const directory = args.length > 0 && !args[0].startsWith("-") ? args[0] : ".";
+
   console.log(`Searching for .sf.ts files in: ${directory}`);
-  
+
   // Find all scenario files
   const scenarioFiles = await findScenarioFiles(directory);
-  
+
   if (scenarioFiles.length === 0) {
     console.log("No .sf.ts files found.");
     return;
   }
-  
+
   console.log(`Found ${scenarioFiles.length} .sf.ts files:`);
-  scenarioFiles.forEach(file => console.log(`- ${file}`));
-  
+  scenarioFiles.forEach((file) => console.log(`- ${file}`));
+
   // Execute each scenario file
   let successCount = 0;
-  
+
   for (const file of scenarioFiles) {
     const success = await executeScenarioFile(file);
     if (success) {
       successCount++;
     }
   }
-  
-  console.log(`\nExecution summary: ${successCount}/${scenarioFiles.length} files executed successfully.`);
+
+  console.log(
+    `\nExecution summary: ${successCount}/${scenarioFiles.length} files executed successfully.`,
+  );
 }
 
 // Run the main function if this module is executed directly

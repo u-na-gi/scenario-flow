@@ -1,4 +1,4 @@
-import { ScenarioFlowContext, createCtx } from "./context.ts";
+import { createCtx, ScenarioFlowContext } from "./context.ts";
 import { ScenarioFlowConfig, ScenarioFlowRequest } from "./type.ts";
 
 export interface ScenarioFlowChain {
@@ -92,9 +92,7 @@ export class ScenarioFlow implements ScenarioFlowChain {
 
   async execute(): Promise<void> {
     try {
-
       await this.run();
-
     } catch (error) {
       console.error("Error in ScenarioFlow:", error);
       throw error; // Rethrow the error to propagate it
