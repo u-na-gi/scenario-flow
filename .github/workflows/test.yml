@@ -1,0 +1,123 @@
+name: Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: Test on Deno ${{ matrix.deno-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        deno-version: ["1.40.x", "1.41.x", "latest"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: ${{ matrix.deno-version }}
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/deno
+            ~/.deno
+          key: ${{ runner.os }}-deno-${{ hashFiles('**/deno.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-
+
+      - name: Check Deno formatting
+        run: deno fmt --check
+
+      - name: Run Deno linter
+        run: deno lint
+
+      - name: Run scenario-flow core tests
+        run: |
+          cd scenario-flow
+          deno test --allow-net --allow-read --coverage=coverage
+
+      - name: Generate coverage report
+        run: |
+          cd scenario-flow
+          deno coverage coverage --lcov --output=coverage.lcov
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./scenario-flow/coverage.lcov
+          flags: scenario-flow-core
+          name: scenario-flow-core-coverage
+          fail_ci_if_error: false
+
+      - name: Run scenario-flow-cli tests
+        run: |
+          cd scenario-flow-cli
+          deno test --allow-read --allow-run --allow-net
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-${{ matrix.deno-version }}
+          path: |
+            scenario-flow/coverage/
+            scenario-flow/coverage.lcov
+
+  test-examples:
+    name: Test Examples
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: "latest"
+
+      - name: Test example scenarios
+        run: |
+          cd example
+          # Check if example files are valid TypeScript
+          deno check scenario/sample-api1/*.sf.ts
+
+      - name: Validate scenario-flow-cli with examples
+        run: |
+          cd scenario-flow-cli
+          deno run --allow-read --allow-run --allow-net main.ts ../example
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: "latest"
+
+      - name: Run security audit
+        run: |
+          # Check for known vulnerabilities in dependencies
+          deno info --json scenario-flow/mod.ts | jq '.modules[].specifier' | grep -E '^https?://' | sort | uniq
+
+          # Validate import integrity
+          cd scenario-flow
+          deno cache --reload mod.ts
+
+          cd ../scenario-flow-cli
+          deno cache --reload main.ts

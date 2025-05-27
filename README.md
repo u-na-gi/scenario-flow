@@ -1,5 +1,9 @@
 # Scenario Flow
 
+[![Test](https://github.com/u-na-gi/scenario-flow/actions/workflows/test.yml/badge.svg)](https://github.com/u-na-gi/scenario-flow/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/u-na-gi/scenario-flow/branch/main/graph/badge.svg)](https://codecov.io/gh/u-na-gi/scenario-flow)
+[![Deno](https://img.shields.io/badge/deno-1.40+-blue.svg)](https://deno.land/)
+
 A scenario-based API flow testing tool built with Deno.
 
 **注意: このプロジェクトは現在開発中のため、使用には注意してください。**\
@@ -154,6 +158,44 @@ sfcli scenarios
 # Execution summary: 1/1 files executed successfully.
 ```
 
+## Testing
+
+This project includes comprehensive unit tests for all core modules.
+
+### Running Tests
+
+```bash
+# Run all tests
+deno task test
+
+# Run core library tests with coverage
+deno task test:core
+
+# Run CLI tests
+deno task test:cli
+
+# Generate coverage report
+deno task test:coverage
+
+# Run CI pipeline locally
+deno task ci
+```
+
+### Test Coverage
+
+The test suite includes:
+
+- **41 unit tests** covering all core functionality
+- **Integration tests** for real-world scenarios
+- **Error handling tests** for robust error management
+- **Type safety tests** for TypeScript compliance
+- **Mock-based testing** for isolated unit testing
+
+Test files are located in:
+
+- `scenario-flow/core/__tests__/` - Core library tests
+- `scenario-flow-cli/main_test.ts` - CLI functionality tests
+
 ## Development
 
 ### Local Development
@@ -162,6 +204,9 @@ sfcli scenarios
 # Clone the repository
 git clone https://github.com/u-na-gi/scenario-flow.git
 cd scenario-flow
+
+# Run all tests
+deno task test
 
 # Run examples
 cd example

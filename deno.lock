@@ -100,6 +100,11 @@
           "jsr:@std/assert@1"
         ]
       },
+      "scenario-flow": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "scenario-flow-cli": {
         "dependencies": [
           "jsr:@std/assert@1"
