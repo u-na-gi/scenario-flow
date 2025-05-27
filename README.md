@@ -6,7 +6,7 @@
 
 A scenario-based API flow testing tool built with Deno.
 
-**注意: このプロジェクトは現在開発中のため、使用には注意してください。**\
+**注意: このプロジェクトは現在開発中のため、使用には注意してください。**
 **Note: This project is currently under development. Use with caution.**
 
 ## Installation
