@@ -40,9 +40,9 @@ class ScenarioFlowContextImple implements ScenarioFlowContext {
   }
 }
 
-export const createCtx =function (
+export const createCtx = function (
   fetcher: (req: ScenarioFlowRequest) => Promise<Response>,
   config: ScenarioFlowConfig,
 ): ScenarioFlowContext {
   return new ScenarioFlowContextImple(fetcher, config);
-}
+};

@@ -20,7 +20,14 @@ Deno.test("CLI help functionality", async () => {
 
 Deno.test("CLI finds .sf.ts files", async () => {
   const process = new Deno.Command("deno", {
-    args: ["run", "--allow-read", "--allow-run", "--allow-net", "main.ts", "../example"],
+    args: [
+      "run",
+      "--allow-read",
+      "--allow-run",
+      "--allow-net",
+      "main.ts",
+      "../example",
+    ],
     cwd: Deno.cwd(),
     stdout: "piped",
     stderr: "piped",

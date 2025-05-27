@@ -1,6 +1,8 @@
 📦 Deno Run CodeLens 拡張の作り方（VS Code Extension）
 
-この拡張は、TypeScript ファイル内に `if (import.meta.main)` がある場合、その行の上に "▶ Run with Deno" という CodeLens を表示し、クリックするとそのファイルを `deno run` で実行します。
+この拡張は、TypeScript ファイル内に `if (import.meta.main)`
+がある場合、その行の上に "▶ Run with Deno" という CodeLens
+を表示し、クリックするとそのファイルを `deno run` で実行します。
 
 ---
 
@@ -18,9 +20,8 @@ npm install -g yo generator-code vsce
 
 🚀 初期化
 
-
-
 選択肢:
+
 - Extension Type: New Extension (TypeScript)
 - Extension Name: 任意 (例: deno-run-codelens)
 - その他は Enter で進めてOK
@@ -35,29 +36,21 @@ cd deno-run-codelens
 
 🛠 src/extension.ts を以下のように編集
 
-// src/extension.ts
-import * as vscode from "vscode";
+// src/extension.ts import * as vscode from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
-  context.subscriptions.push(
-    vscode.languages.registerCodeLensProvider(
-      { language: "typescript", scheme: "file" },
-      new ImportMetaMainCodeLensProvider()
-    )
-  );
+context.subscriptions.push( vscode.languages.registerCodeLensProvider( {
+language: "typescript", scheme: "file" }, new ImportMetaMainCodeLensProvider() )
+);
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand("extension.runDenoMain", (fileUri: vscode.Uri) => {
-      const terminal = vscode.window.createTerminal("Deno Run");
-      terminal.show();
-      terminal.sendText(`deno run --allow-all "${fileUri.fsPath}"`);
-    })
-  );
-}
+context.subscriptions.push(
+vscode.commands.registerCommand("extension.runDenoMain", (fileUri: vscode.Uri)
+=> { const terminal = vscode.window.createTerminal("Deno Run"); terminal.show();
+terminal.sendText(`deno run --allow-all "${fileUri.fsPath}"`); }) ); }
 
 class ImportMetaMainCodeLensProvider implements vscode.CodeLensProvider {
-  provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
-    const lenses: vscode.CodeLens[] = [];
+provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] { const
+lenses: vscode.CodeLens[] = [];
 
     for (let i = 0; i < document.lineCount; i++) {
       const line = document.lineAt(i);
@@ -76,27 +69,16 @@ class ImportMetaMainCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     return lenses;
-  }
-}
+
+} }
 
 ---
 
 🧩 package.json に追記
 
-"contributes": {
-  "commands": [
-    {
-      "command": "extension.runDenoMain",
-      "title": "Run this file with Deno"
-    }
-  ],
-  "languages": [
-    {
-      "id": "typescript",
-      "extensions": [".ts"]
-    }
-  ]
-}
+"contributes": { "commands": [ { "command": "extension.runDenoMain", "title":
+"Run this file with Deno" } ], "languages": [ { "id": "typescript",
+"extensions": [".ts"] } ] }
 
 ---
 
@@ -105,7 +87,8 @@ class ImportMetaMainCodeLensProvider implements vscode.CodeLensProvider {
 1. `npm install` を実行して依存関係を入れる
 2. VS Code で `code .` を実行して開く
 3. `F5` を押すと「Extension Development Host」が立ち上がる
-4. `if (import.meta.main)` を含む `.ts` ファイルを開くと "▶ Run with Deno" が表示される
+4. `if (import.meta.main)` を含む `.ts` ファイルを開くと "▶ Run with Deno"
+   が表示される
 
 ---
 
@@ -136,12 +119,9 @@ class ImportMetaMainCodeLensProvider implements vscode.CodeLensProvider {
 
 ✅ 使用例
 
-// main.ts
-import { login } from "./login.ts";
+// main.ts import { login } from "./login.ts";
 
-if (import.meta.main) {
-  await login.execute();
-}
+if (import.meta.main) { await login.execute(); }
 
 ---
 

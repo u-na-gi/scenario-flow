@@ -2,7 +2,7 @@
 
 A scenario-based API flow testing tool built with Deno.
 
-**注意: このプロジェクトは現在開発中のため、使用には注意してください。**  
+**注意: このプロジェクトは現在開発中のため、使用には注意してください。**\
 **Note: This project is currently under development. Use with caution.**
 
 ## Installation
@@ -93,7 +93,6 @@ sfcli ./scenarios
 - 📊 **Execution summary** and error reporting
 - 🛠️ **Easy installation** and global access
 
-
 ## Examples
 
 ### Basic API Test
@@ -104,32 +103,32 @@ import { ScenarioFlow } from "scenario-flow";
 const apiTest = new ScenarioFlow({
   apiBaseUrl: "https://api.example.com/",
 })
-.step(async (ctx) => {
-  // First step: Login
-  const loginRes = await ctx.fetcher({
-    method: "POST",
-    urlPaths: ["auth", "login"],
-    body: JSON.stringify({ username: "test", password: "test" }),
+  .step(async (ctx) => {
+    // First step: Login
+    const loginRes = await ctx.fetcher({
+      method: "POST",
+      urlPaths: ["auth", "login"],
+      body: JSON.stringify({ username: "test", password: "test" }),
+    });
+
+    const { token } = await loginRes.json();
+    ctx.addContext("authToken", token);
+  })
+  .step(async (ctx) => {
+    // Second step: Get user data
+    const token = ctx.getContext<string>("authToken");
+
+    const userRes = await ctx.fetcher({
+      method: "GET",
+      urlPaths: ["user", "profile"],
+      headers: {
+        "Authorization": `Bearer ${token}`,
+      },
+    });
+
+    const userData = await userRes.json();
+    console.log("User data:", userData);
   });
-  
-  const { token } = await loginRes.json();
-  ctx.addContext("authToken", token);
-})
-.step(async (ctx) => {
-  // Second step: Get user data
-  const token = ctx.getContext<string>("authToken");
-  
-  const userRes = await ctx.fetcher({
-    method: "GET",
-    urlPaths: ["user", "profile"],
-    headers: {
-      "Authorization": `Bearer ${token}`,
-    },
-  });
-  
-  const userData = await userRes.json();
-  console.log("User data:", userData);
-});
 
 if (import.meta.main) {
   await apiTest.execute();

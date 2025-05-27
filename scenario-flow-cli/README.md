@@ -1,18 +1,22 @@
 # Scenario Flow CLI (sfcli)
 
-A command-line tool for finding and executing ScenarioFlow files (`.sf.ts`) with network permissions.
+A command-line tool for finding and executing ScenarioFlow files (`.sf.ts`) with
+network permissions.
 
 ## Installation
 
 ### Global Installation
+
 ```bash
 cd scenario-flow-cli
 deno task install
 ```
 
-This will install the `sfcli` command globally, making it available from anywhere on your system.
+This will install the `sfcli` command globally, making it available from
+anywhere on your system.
 
 ### Local Usage
+
 ```bash
 cd scenario-flow-cli
 deno task start [directory]
@@ -51,7 +55,8 @@ sfcli -h
 
 The CLI tool:
 
-1. **Searches recursively** for all files with the `.sf.ts` extension in the specified directory
+1. **Searches recursively** for all files with the `.sf.ts` extension in the
+   specified directory
 2. **Executes each file** using `deno run --allow-net <file>`
 3. **Reports results** showing which files were executed successfully
 4. **Provides summary** of execution results
@@ -68,11 +73,13 @@ The CLI tool:
 ## Development
 
 ### Running Tests
+
 ```bash
 deno task test
 ```
 
 ### Development Mode
+
 ```bash
 deno task dev
 ```
