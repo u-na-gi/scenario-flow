@@ -1,19 +1,10 @@
-FROM denoland/deno:latest
+FROM debian:bookworm-slim
+COPY --from=denoland/deno:bin-2.3.3 /deno /usr/local/bin/deno
+
+ENV DENO_INSTALL="/root/.deno"
+ENV PATH="$DENO_INSTALL/bin:$PATH"
 
 WORKDIR /app
+# COPY . .
 
-# Copy application files
-COPY main.ts .
-COPY deno.json .
-COPY deno.lock .
-COPY middleware.ts .
-COPY routes.ts .
-
-# Cache the dependencies
-RUN deno cache main.ts
-
-# Expose the port
-EXPOSE 3323
-
-# Start the server
-CMD ["deno", "run", "--allow-net", "main.ts"]
+# CMD ["deno", "run", "--allow-net", "main.ts"]

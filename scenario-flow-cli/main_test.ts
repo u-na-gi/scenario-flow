@@ -1,5 +1,4 @@
 import { assertEquals } from "@std/assert";
-import { join } from "https://deno.land/std@0.204.0/path/mod.ts";
 
 Deno.test("CLI help functionality", async () => {
   const process = new Deno.Command("deno", {
@@ -40,4 +39,7 @@ Deno.test("CLI finds .sf.ts files", async () => {
   assertEquals(output.includes("Found 2 .sf.ts files:"), true);
   assertEquals(output.includes("login.sf.ts"), true);
   assertEquals(output.includes("get-data.sf.ts"), true);
+  // Check for improved logging output
+  assertEquals(output.includes("🔍 Searching for"), true);
+  assertEquals(output.includes("📄"), true);
 });

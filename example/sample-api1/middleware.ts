@@ -1,4 +1,4 @@
-import { Context, Next } from "oak";
+import { Context, Next } from "jsr:@oak/oak";
 
 // Simple in-memory token storage
 export const tokenStore = new Set<string>();

@@ -1,38 +1,43 @@
 import { createCtx, ScenarioFlowContext } from "./context.ts";
-import { ScenarioFlowConfig, ScenarioFlowRequest } from "./type.ts";
+import {
+  NamedStep,
+  ScenarioFlowConfig,
+  ScenarioFlowRequest,
+  ScenarioFlowStepFunction,
+} from "./type.ts";
+import { logger } from "./logger.ts";
 
 export interface ScenarioFlowChain {
-  step(paren: ScenarioFlowChain): ScenarioFlowChain;
-  step(fn: ScenarioFlowStepFunction): ScenarioFlowChain;
+  step(name: string, fn: ScenarioFlowStepFunction): ScenarioFlowChain;
+  step(parent: ScenarioFlowChain): ScenarioFlowChain;
   execute(): Promise<void>;
 }
 
-export type ScenarioFlowStepFunction = (
-  ctx: ScenarioFlowContext,
-) => Promise<void>;
+// Re-export the type from type.ts
+export type { ScenarioFlowStepFunction } from "./type.ts";
 
 export class ScenarioFlow implements ScenarioFlowChain {
+  private scenarioName: string;
   private config: ScenarioFlowConfig;
   private ctx: ScenarioFlowContext;
-  private steps: ScenarioFlowStepFunction[] = [];
+  private steps: NamedStep[] = [];
 
-  constructor(scenarioFlowChain: ScenarioFlowChain);
-  constructor(config: ScenarioFlowConfig);
-  constructor(arg: ScenarioFlowConfig | ScenarioFlowChain) {
+  constructor(name: string, config: ScenarioFlowConfig);
+  constructor(name: string, scenarioFlowChain: ScenarioFlowChain);
+  constructor(name: string, arg: ScenarioFlowConfig | ScenarioFlowChain) {
+    this.scenarioName = name;
+
     if (typeof arg === "object" && "apiBaseUrl" in arg) {
       this.config = arg;
       const fetcher = this.createFetcher();
       this.ctx = createCtx(fetcher, this.config);
-
       return;
     }
 
     if (arg instanceof ScenarioFlow) {
       this.config = arg.config;
       this.ctx = arg.ctx;
-
       this.steps = [...arg.steps];
-      console.log("add ScenarioFlow:", this);
       return;
     }
 
@@ -44,12 +49,40 @@ export class ScenarioFlow implements ScenarioFlowChain {
   private createFetcher() {
     return async (req: ScenarioFlowRequest): Promise<Response> => {
       const url = this.joinUrl(...req.urlPaths);
-      console.log("URL:", url);
-      console.log("Request:", req);
+      const requestStartTime = performance.now();
+
+      // Log request
+      const method = req.method || "GET";
+      const bodyStr = req.body
+        ? (typeof req.body === "string" ? req.body : "[Binary Data]")
+        : undefined;
+      logger.logRequest(method, url, bodyStr);
+
       const response = await fetch(url, req);
+      const requestDuration = performance.now() - requestStartTime;
+
+      // Log response
+      let responseBody: string | undefined;
+      try {
+        const clonedResponse = response.clone();
+        const text = await clonedResponse.text();
+        responseBody = text;
+      } catch {
+        responseBody = "[Unable to read response body]";
+      }
+
+      logger.logResponse(
+        response.status,
+        response.statusText,
+        requestDuration,
+        responseBody,
+      );
+
       if (!response.ok) {
+        logger.logError(`HTTP error! status: ${response.status}`);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+
       return response;
     };
   }
@@ -61,32 +94,43 @@ export class ScenarioFlow implements ScenarioFlowChain {
     return clean.join("/");
   }
 
+  step(name: string, fn: ScenarioFlowStepFunction): ScenarioFlowChain;
   step(parent: ScenarioFlowChain): ScenarioFlowChain;
-  step(fn: ScenarioFlowStepFunction): ScenarioFlowChain;
-  step(arg: ScenarioFlowStepFunction | ScenarioFlowChain): ScenarioFlowChain {
-    // Implement the step logic here
-    if (typeof arg === "function") {
-      this.steps.push(arg);
+  step(
+    nameOrParent: string | ScenarioFlowChain,
+    fn?: ScenarioFlowStepFunction,
+  ): ScenarioFlowChain {
+    if (typeof nameOrParent === "string" && fn) {
+      this.steps.push({ name: nameOrParent, fn });
       return this;
     }
 
-    if (arg instanceof ScenarioFlow) {
-      this.steps.push(...arg.steps);
-      this.ctx.merge(arg.ctx);
+    if (nameOrParent instanceof ScenarioFlow) {
+      this.steps.push(...nameOrParent.steps);
+      this.ctx.merge(nameOrParent.ctx);
       return this;
     }
-    return this;
+
+    throw new Error("Invalid step arguments");
   }
 
   private async run(): Promise<void> {
-    // stepの実行
-    for (const step of this.steps) {
-      try {
-        await step(this.ctx);
-      } catch (error) {
-        console.error("Error in step:", error);
-        throw error; // Rethrow the error to propagate it
+    logger.startScenario(this.scenarioName);
+
+    try {
+      for (const step of this.steps) {
+        logger.startStep(step.name);
+        try {
+          await step.fn(this.ctx);
+          logger.endStep();
+        } catch (error) {
+          logger.logError(`Error in step "${step.name}": ${error}`);
+          logger.endStep();
+          throw error;
+        }
       }
+    } finally {
+      logger.endScenario();
     }
   }
 
@@ -94,8 +138,8 @@ export class ScenarioFlow implements ScenarioFlowChain {
     try {
       await this.run();
     } catch (error) {
-      console.error("Error in ScenarioFlow:", error);
-      throw error; // Rethrow the error to propagate it
+      logger.logError(`Error in scenario "${this.scenarioName}": ${error}`);
+      throw error;
     }
   }
 }

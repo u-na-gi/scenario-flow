@@ -1,0 +1,6 @@
+{
+  "recommendations": [
+    "denoland.vscode-deno",
+    "justjavac.vscode-deno-extensionpack"
+  ]
+}

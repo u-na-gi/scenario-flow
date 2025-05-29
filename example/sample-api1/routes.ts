@@ -1,6 +1,6 @@
-import { Router } from "oak";
+import { Router } from "jsr:@oak/oak";
 import { tokenStore } from "./middleware.ts";
-import { create } from "djwt";
+import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 // Secret key for JWT signing (in a real app, this would be an environment variable)
 const KEY = new TextEncoder().encode("your-secret-key-here");

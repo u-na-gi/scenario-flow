@@ -1,4 +1,4 @@
-import { Application } from "oak";
+import { Application } from "https://deno.land/x/oak/mod.ts";
 import { authMiddleware } from "./middleware.ts";
 import router from "./routes.ts";
 

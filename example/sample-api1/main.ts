@@ -1,16 +1,16 @@
-import { Application } from "oak";
-import { authMiddleware } from "./middleware.ts";
-import router from "./routes.ts";
+import { Application } from "jsr:@oak/oak";
+// import { authMiddleware } from "./middleware.ts";
+// import router from "./routes.ts";
 
 // Create Oak application
 const app = new Application();
 
-// Set up middleware
-app.use(authMiddleware);
+// // Set up middleware
+// app.use(authMiddleware);
 
-// Set up routes
-app.use(router.routes());
-app.use(router.allowedMethods());
+// // Set up routes
+// app.use(router.routes());
+// app.use(router.allowedMethods());
 
 // Add a simple error handler
 app.use(async (ctx: any, next: any) => {
