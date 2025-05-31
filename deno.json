@@ -2,9 +2,7 @@
   "workspace": {
     "members": [
       "scenario-flow",
-      "example",
-      "scenario-flow-cli",
-      "example/sample-api1"
+      "scenario-flow-cli"
     ]
   }
 }

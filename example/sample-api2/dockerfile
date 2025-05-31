@@ -1,4 +1,4 @@
-FROM denoland/deno:debian-2.3.3
+FROM ghcr.io/u-na-gi/rust-node-deno-wasm-pack:latest
 
 RUN apt-get update && apt-get install -y \
     curl \

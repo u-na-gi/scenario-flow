@@ -1,5 +1,5 @@
-FROM debian:bookworm-slim
-COPY --from=denoland/deno:bin-2.3.3 /deno /usr/local/bin/deno
+FROM ghcr.io/u-na-gi/rust-node-deno-wasm-pack:latest
+
 
 ENV DENO_INSTALL="/root/.deno"
 ENV PATH="$DENO_INSTALL/bin:$PATH"

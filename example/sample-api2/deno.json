@@ -3,6 +3,6 @@
     "dev": "deno run --allow-net main.ts"
   },
   "imports": {
-
+    "@oak/oak": "jsr:@oak/oak@^17.1.4"
   }
 }

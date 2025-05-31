@@ -1,6 +1,7 @@
 
 services:
   sample-api1:
+    platform: linux/amd64
     build:
       context: ./sample-api1
       dockerfile: dockerfile
@@ -14,6 +15,7 @@ services:
       tail -f /dev/null
 
   sample-api2:
+    platform: linux/amd64
     build:
       context: ./sample-api2
       dockerfile: dockerfile
