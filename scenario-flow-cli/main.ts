@@ -2,6 +2,7 @@
 
 import { resolve } from "https://deno.land/std@0.204.0/path/mod.ts";
 import { walk } from "https://deno.land/std@0.204.0/fs/walk.ts";
+import { logger } from "../scenario-flow/core/logger.ts";
 
 /**
  * Prints the help message for the CLI
@@ -60,8 +61,6 @@ async function findScenarioFiles(directory: string): Promise<string[]> {
  */
 async function executeScenarioFile(filePath: string): Promise<boolean> {
   try {
-    console.log(`Executing: ${filePath}`);
-
     const process = new Deno.Command("deno", {
       args: ["run", "--allow-net", "--allow-env", filePath],
       stdout: "inherit",
@@ -70,13 +69,7 @@ async function executeScenarioFile(filePath: string): Promise<boolean> {
 
     const { code } = await process.output();
 
-    if (code === 0) {
-      console.log(`Successfully executed: ${filePath}`);
-      return true;
-    } else {
-      console.error(`Failed to execute: ${filePath} (exit code: ${code})`);
-      return false;
-    }
+    return code === 0;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(`Error executing ${filePath}: ${errorMessage}`);
@@ -99,20 +92,22 @@ async function main(): Promise<void> {
   // Determine the directory to search
   const directory = args.length > 0 && !args[0].startsWith("-") ? args[0] : ".";
 
-  console.log(`Searching for .sf.ts files in: ${directory}`);
+  console.log(`🔍 Searching for .sf.ts files in: ${directory}`);
 
   // Find all scenario files
   const scenarioFiles = await findScenarioFiles(directory);
 
   if (scenarioFiles.length === 0) {
-    console.log("No .sf.ts files found.");
+    console.log("❌ No .sf.ts files found.");
     return;
   }
 
-  console.log(`Found ${scenarioFiles.length} .sf.ts files:`);
-  scenarioFiles.forEach((file) => console.log(`- ${file}`));
+  console.log(`✅ Found ${scenarioFiles.length} .sf.ts files:`);
+  scenarioFiles.forEach((file) => console.log(`  📄 ${file}`));
+  console.log("");
 
-  // Execute each scenario file
+  // Execute each scenario file with timing
+  const startTime = performance.now();
   let successCount = 0;
 
   for (const file of scenarioFiles) {
@@ -122,9 +117,10 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(
-    `\nExecution summary: ${successCount}/${scenarioFiles.length} files executed successfully.`,
-  );
+  const totalDuration = performance.now() - startTime;
+
+  // Use the logger for the final summary
+  logger.logExecutionSummary(scenarioFiles.length, successCount, totalDuration);
 }
 
 // Run the main function if this module is executed directly

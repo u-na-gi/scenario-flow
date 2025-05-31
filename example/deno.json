@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "dev": "deno run --watch main.ts",
+    "server:start": "deno run -A --watch ./sample-api/server.ts",
     "test": "deno run --allow-read --allow-run --allow-net ../scenario-flow-cli/main.ts ."
   },
   "imports": {

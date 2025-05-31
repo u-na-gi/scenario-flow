@@ -1,8 +1,8 @@
-import { ScenarioFlow } from "../../../scenario-flow/mod.ts";
+import { ScenarioFlow } from "../../scenario-flow/mod.ts";
 
-export const login = new ScenarioFlow({
+export const login = new ScenarioFlow("User Login", {
   apiBaseUrl: "http://localhost:3323/",
-}).step(async (ctx) => {
+}).step("Exec Login", async (ctx) => {
   const res = await ctx.fetcher(
     {
       method: "POST",
@@ -19,7 +19,6 @@ export const login = new ScenarioFlow({
 
   if (res.ok) {
     const data = await res.json();
-    console.log("Login data:", data);
     ctx.addContext("token", data.token);
   }
 });
