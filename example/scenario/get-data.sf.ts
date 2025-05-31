@@ -1,4 +1,4 @@
-import { ScenarioFlow } from "../../../scenario-flow/mod.ts";
+import { ScenarioFlow } from "../../scenario-flow/mod.ts";
 import { login } from "./login.sf.ts";
 
 const getData = new ScenarioFlow("データ取得フロー", login)

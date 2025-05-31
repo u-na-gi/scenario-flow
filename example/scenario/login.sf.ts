@@ -1,4 +1,4 @@
-import { ScenarioFlow } from "../../../scenario-flow/mod.ts";
+import { ScenarioFlow } from "../../scenario-flow/mod.ts";
 
 export const login = new ScenarioFlow("ユーザーログイン", {
   apiBaseUrl: "http://localhost:3323/",
