@@ -1,8 +1,8 @@
 import { ScenarioFlow } from "../../scenario-flow/mod.ts";
 
-export const login = new ScenarioFlow("ユーザーログイン", {
+export const login = new ScenarioFlow("User Login", {
   apiBaseUrl: "http://localhost:3323/",
-}).step("ログイン実行", async (ctx) => {
+}).step("Exec Login", async (ctx) => {
   const res = await ctx.fetcher(
     {
       method: "POST",

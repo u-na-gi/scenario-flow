@@ -1,8 +1,8 @@
 import { ScenarioFlow } from "../../scenario-flow/mod.ts";
 import { login } from "./login.sf.ts";
 
-const getData = new ScenarioFlow("データ取得フロー", login)
-  .step("認証済みデータ取得", async (ctx) => {
+const getData = new ScenarioFlow("Get some data", login)
+  .step("Get authorized data", async (ctx) => {
     const token = ctx.getContext<string>("token");
     if (!token) {
       throw new Error("Token not found");
