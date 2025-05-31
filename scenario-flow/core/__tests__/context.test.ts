@@ -1,5 +1,5 @@
-import { assertEquals, assertThrows } from "@std/assert";
-import { createCtx, ScenarioFlowContext } from "../context.ts";
+import { assertEquals } from "@std/assert";
+import { createCtx } from "../context.ts";
 import { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
 
 Deno.test("ScenarioFlowContext - createCtx creates context correctly", () => {
@@ -7,7 +7,8 @@ Deno.test("ScenarioFlowContext - createCtx creates context correctly", () => {
     apiBaseUrl: "https://api.example.com",
   };
 
-  const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
+  const mockFetcher = async (_req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response("test");
   };
 
@@ -26,7 +27,8 @@ Deno.test("ScenarioFlowContext - getConfig returns correct config", () => {
     apiBaseUrl: "https://api.example.com",
   };
 
-  const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
+  const mockFetcher = async (_req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response("test");
   };
 
@@ -42,7 +44,8 @@ Deno.test("ScenarioFlowContext - addContext and getContext work correctly", () =
     apiBaseUrl: "https://api.example.com",
   };
 
-  const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
+  const mockFetcher = async (_req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response("test");
   };
 
@@ -70,7 +73,8 @@ Deno.test("ScenarioFlowContext - getContext with generic type", () => {
     apiBaseUrl: "https://api.example.com",
   };
 
-  const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
+  const mockFetcher = async (_req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response("test");
   };
 
@@ -94,7 +98,8 @@ Deno.test("ScenarioFlowContext - merge combines contexts correctly", () => {
     apiBaseUrl: "https://api.example.com",
   };
 
-  const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
+  const mockFetcher = async (_req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response("test");
   };
 
@@ -125,6 +130,7 @@ Deno.test("ScenarioFlowContext - fetcher function works", async () => {
 
   const mockResponse = new Response("mock response", { status: 200 });
   const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     assertEquals(req.urlPaths, ["test", "path"]);
     return mockResponse;
   };
@@ -145,7 +151,8 @@ Deno.test("ScenarioFlowContext - customContext is initially empty", () => {
     apiBaseUrl: "https://api.example.com",
   };
 
-  const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
+  const mockFetcher = async (_req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response("test");
   };
 
@@ -160,7 +167,8 @@ Deno.test("ScenarioFlowContext - context overwrite behavior", () => {
     apiBaseUrl: "https://api.example.com",
   };
 
-  const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
+  const mockFetcher = async (_req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response("test");
   };
 

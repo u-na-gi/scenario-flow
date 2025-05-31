@@ -60,7 +60,7 @@ Deno.test("ScenarioFlowRequest - various HTTP methods", () => {
   methods.forEach((method) => {
     const request: ScenarioFlowRequest = {
       urlPaths: ["test"],
-      method: method as any,
+      method: method as unknown as "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
     };
 
     assertEquals(request.method, method);

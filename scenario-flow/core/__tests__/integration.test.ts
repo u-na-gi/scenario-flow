@@ -12,6 +12,7 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
     url: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     fetchCalls.push({ url: url.toString(), init });
 
     // Simulate different responses based on URL
@@ -50,7 +51,7 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
       apiBaseUrl: "https://api.example.com",
     };
 
-    const scenarioFlow = new ScenarioFlow(config);
+    const scenarioFlow = new ScenarioFlow("", config);
 
     // Step 1: Login
     const loginStep: ScenarioFlowStepFunction = async (ctx) => {
@@ -109,9 +110,9 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
 
     // Chain the steps
     scenarioFlow
-      .step(loginStep)
-      .step(getUserStep)
-      .step(getDataStep);
+      .step("", loginStep)
+      .step("", getUserStep)
+      .step("", getDataStep);
 
     // Execute the scenario
     await scenarioFlow.execute();
@@ -138,9 +139,10 @@ Deno.test("Integration - ScenarioFlow chaining with context sharing", async () =
   // Mock fetch globally for this test
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (
-    url: string | URL | Request,
-    init?: RequestInit,
+    _url: string | URL | Request,
+    _init?: RequestInit,
   ): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   };
 
@@ -150,27 +152,30 @@ Deno.test("Integration - ScenarioFlow chaining with context sharing", async () =
     };
 
     // Create first flow
-    const flow1 = new ScenarioFlow(config);
+    const flow1 = new ScenarioFlow("", config);
     const step1: ScenarioFlowStepFunction = async (ctx) => {
+      await Promise.resolve(); // Simulate async operation
       ctx.addContext("flow1Data", "data from flow 1");
       ctx.addContext("shared", "original value");
     };
-    flow1.step(step1);
+    flow1.step("", step1);
 
     // Create second flow
-    const flow2 = new ScenarioFlow(config);
+    const flow2 = new ScenarioFlow("", config);
     const step2: ScenarioFlowStepFunction = async (ctx) => {
+      await Promise.resolve(); // Simulate async operation
       ctx.addContext("flow2Data", "data from flow 2");
       ctx.addContext("shared", "overwritten value");
     };
-    flow2.step(step2);
+    flow2.step("", step2);
 
     // Create combined flow
-    const combinedFlow = new ScenarioFlow(flow1);
+    const combinedFlow = new ScenarioFlow("", flow1);
     combinedFlow.step(flow2);
 
     // Add a verification step
     const verificationStep: ScenarioFlowStepFunction = async (ctx) => {
+      await Promise.resolve(); // Simulate async operation
       const flow1Data = ctx.getContext("flow1Data");
       const flow2Data = ctx.getContext("flow2Data");
       const sharedData = ctx.getContext("shared");
@@ -182,7 +187,7 @@ Deno.test("Integration - ScenarioFlow chaining with context sharing", async () =
       });
     };
 
-    combinedFlow.step(verificationStep);
+    combinedFlow.step("", verificationStep);
 
     await combinedFlow.execute();
 
@@ -199,9 +204,10 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
   let callCount = 0;
 
   globalThis.fetch = async (
-    url: string | URL | Request,
-    init?: RequestInit,
+    _url: string | URL | Request,
+    _init?: RequestInit,
   ): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     callCount++;
     if (callCount === 2) {
       // Second call fails
@@ -215,7 +221,7 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
       apiBaseUrl: "https://api.example.com",
     };
 
-    const scenarioFlow = new ScenarioFlow(config);
+    const scenarioFlow = new ScenarioFlow("", config);
 
     const step1: ScenarioFlowStepFunction = async (ctx) => {
       const request: ScenarioFlowRequest = {
@@ -236,14 +242,15 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
     };
 
     const step3: ScenarioFlowStepFunction = async (ctx) => {
+      await Promise.resolve(); // Simulate async operation
       // This should not execute due to step2 failure
       ctx.addContext("step3", "completed");
     };
 
     scenarioFlow
-      .step(step1)
-      .step(step2)
-      .step(step3);
+      .step("", step1)
+      .step("", step2)
+      .step("", step3);
 
     await assertRejects(
       () => scenarioFlow.execute(),
@@ -259,9 +266,10 @@ Deno.test("Integration - Context isolation between different ScenarioFlow instan
   // Mock fetch globally for this test
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (
-    url: string | URL | Request,
-    init?: RequestInit,
+    _url: string | URL | Request,
+    _init?: RequestInit,
   ): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   };
 
@@ -271,21 +279,23 @@ Deno.test("Integration - Context isolation between different ScenarioFlow instan
     };
 
     // Create two separate flows
-    const flow1 = new ScenarioFlow(config);
-    const flow2 = new ScenarioFlow(config);
+    const flow1 = new ScenarioFlow("", config);
+    const flow2 = new ScenarioFlow("", config);
 
     const step1: ScenarioFlowStepFunction = async (ctx) => {
+      await Promise.resolve(); // Simulate async operation
       ctx.addContext("flowId", "flow1");
       ctx.addContext("data", "flow1 data");
     };
 
     const step2: ScenarioFlowStepFunction = async (ctx) => {
+      await Promise.resolve(); // Simulate async operation
       ctx.addContext("flowId", "flow2");
       ctx.addContext("data", "flow2 data");
     };
 
-    flow1.step(step1);
-    flow2.step(step2);
+    flow1.step("", step1);
+    flow2.step("", step2);
 
     // Execute both flows
     await flow1.execute();
@@ -304,7 +314,8 @@ Deno.test("Integration - createCtx function with ScenarioFlow", async () => {
     apiBaseUrl: "https://api.example.com",
   };
 
-  const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
+  const mockFetcher = async (_req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
     return new Response(JSON.stringify({ test: "data" }), { status: 200 });
   };
 

@@ -1,3 +1,4 @@
+import process from "node:process";
 const esbuild = require("esbuild");
 
 const production = process.argv.includes("--production");
