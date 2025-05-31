@@ -2,6 +2,7 @@
   "version": "5",
   "specifiers": {
     "jsr:@std/assert@1": "1.0.13",
+    "jsr:@std/assert@^1.0.13": "1.0.13",
     "jsr:@std/internal@^1.0.6": "1.0.8"
   },
   "jsr": {
@@ -98,6 +99,11 @@
       "example": {
         "dependencies": [
           "jsr:@std/assert@1"
+        ]
+      },
+      "scenario-flow": {
+        "dependencies": [
+          "jsr:@std/assert@^1.0.13"
         ]
       },
       "scenario-flow-cli": {
