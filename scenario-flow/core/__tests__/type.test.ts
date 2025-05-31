@@ -26,20 +26,19 @@ Deno.test("ScenarioFlowConfig - various URL formats", () => {
 
 Deno.test("ScenarioFlowRequest - basic structure", () => {
   const request: ScenarioFlowRequest = {
-    urlPaths: ["users", "123"],
+    path: "/users/123",
     method: "GET",
   };
 
-  assertEquals(Array.isArray(request.urlPaths), true);
-  assertEquals(request.urlPaths.length, 2);
-  assertEquals(request.urlPaths[0], "users");
-  assertEquals(request.urlPaths[1], "123");
+  assertEquals(typeof request.path, "string");
+  assertEquals(request.path, "/users/123");
+
   assertEquals(request.method, "GET");
 });
 
 Deno.test("ScenarioFlowRequest - extends RequestInit", () => {
   const request: ScenarioFlowRequest = {
-    urlPaths: ["api", "data"],
+    path: "/api/data",
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -48,7 +47,7 @@ Deno.test("ScenarioFlowRequest - extends RequestInit", () => {
     body: JSON.stringify({ name: "test", value: 123 }),
   };
 
-  assertEquals(Array.isArray(request.urlPaths), true);
+  assertEquals(typeof request.path, "string");
   assertEquals(request.method, "POST");
   assertEquals(typeof request.headers, "object");
   assertEquals(typeof request.body, "string");
@@ -59,38 +58,38 @@ Deno.test("ScenarioFlowRequest - various HTTP methods", () => {
 
   methods.forEach((method) => {
     const request: ScenarioFlowRequest = {
-      urlPaths: ["test"],
+      path: "/test",
       method: method as unknown as "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
     };
 
     assertEquals(request.method, method);
-    assertEquals(Array.isArray(request.urlPaths), true);
+    assertEquals(typeof request.path, "string");
   });
 });
 
-Deno.test("ScenarioFlowRequest - empty urlPaths", () => {
+Deno.test("ScenarioFlowRequest - empty path", () => {
   const request: ScenarioFlowRequest = {
-    urlPaths: [],
+    path: "",
     method: "GET",
   };
 
-  assertEquals(Array.isArray(request.urlPaths), true);
-  assertEquals(request.urlPaths.length, 0);
+  assertEquals(typeof request.path, "string");
+  assertEquals(request.path.length, 0);
 });
 
-Deno.test("ScenarioFlowRequest - complex urlPaths", () => {
+Deno.test("ScenarioFlowRequest - complex path", () => {
   const request: ScenarioFlowRequest = {
-    urlPaths: ["api", "v1", "users", "123", "profile", "settings"],
+    path: "/api/v1/users/123/profile/settings",
     method: "GET",
   };
 
-  assertEquals(request.urlPaths.length, 6);
-  assertEquals(request.urlPaths.join("/"), "api/v1/users/123/profile/settings");
+  assertEquals(typeof request.path, "string");
+  assertEquals(request.path, "/api/v1/users/123/profile/settings");
 });
 
 Deno.test("ScenarioFlowRequest - with query parameters in RequestInit", () => {
   const request: ScenarioFlowRequest = {
-    urlPaths: ["search"],
+    path: "/search",
     method: "GET",
     // Note: query parameters would typically be handled in the URL construction
     // but we can test that RequestInit properties are preserved
@@ -98,7 +97,7 @@ Deno.test("ScenarioFlowRequest - with query parameters in RequestInit", () => {
     credentials: "include",
   };
 
-  assertEquals(request.urlPaths[0], "search");
+  assertEquals(request.path, "/search");
   assertEquals(request.cache, "no-cache");
   assertEquals(request.credentials, "include");
 });
@@ -114,7 +113,7 @@ Deno.test("ScenarioFlowRequest - with request body", () => {
   };
 
   const request: ScenarioFlowRequest = {
-    urlPaths: ["users"],
+    path: "/users",
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -130,24 +129,25 @@ Deno.test("ScenarioFlowRequest - with request body", () => {
   assertEquals(parsedBody.preferences.theme, "dark");
 });
 
-Deno.test("ScenarioFlowRequest - urlPaths with special characters", () => {
+Deno.test("ScenarioFlowRequest - path with special characters", () => {
   const request: ScenarioFlowRequest = {
-    urlPaths: ["users", "user@example.com", "data-2024", "file_name.json"],
+    path: "/users/user@example.com/data-2024/file_name.json",
     method: "GET",
   };
 
-  assertEquals(request.urlPaths.length, 4);
-  assertEquals(request.urlPaths[1], "user@example.com");
-  assertEquals(request.urlPaths[2], "data-2024");
-  assertEquals(request.urlPaths[3], "file_name.json");
+  assertEquals(typeof request.path, "string");
+  assertEquals(
+    request.path,
+    "/users/user@example.com/data-2024/file_name.json",
+  );
 });
 
 Deno.test("ScenarioFlowRequest - minimal required properties", () => {
   const request: ScenarioFlowRequest = {
-    urlPaths: ["minimal"],
+    path: "/minimal",
   };
 
-  assertEquals(Array.isArray(request.urlPaths), true);
-  assertEquals(request.urlPaths[0], "minimal");
+  assertEquals(typeof request.path, "string");
+  assertEquals(request.path, "/minimal");
   // method is optional since it extends RequestInit where method has a default
 });

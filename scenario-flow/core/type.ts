@@ -3,7 +3,7 @@ export interface ScenarioFlowConfig {
 }
 
 export interface ScenarioFlowRequest extends RequestInit {
-  urlPaths: string[];
+  path: string;
 }
 
 export interface NamedStep {

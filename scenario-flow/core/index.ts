@@ -48,7 +48,7 @@ export class ScenarioFlow implements ScenarioFlowChain {
 
   private createFetcher() {
     return async (req: ScenarioFlowRequest): Promise<Response> => {
-      const url = this.joinUrl(...req.urlPaths);
+      const url = this.joinUrl(req.path);
       const requestStartTime = performance.now();
 
       // Log request
@@ -87,8 +87,8 @@ export class ScenarioFlow implements ScenarioFlowChain {
     };
   }
 
-  private joinUrl(...parts: string[]): string {
-    const clean = [this.config.apiBaseUrl, ...parts].map((p) =>
+  private joinUrl(parts: string): string {
+    const clean = [this.config.apiBaseUrl, parts].map((p) =>
       p.replace(/^\/+|\/+$/g, "")
     );
     return clean.join("/");

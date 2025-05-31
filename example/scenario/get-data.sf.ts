@@ -11,7 +11,7 @@ const getData = new ScenarioFlow("Get some data", login)
     await ctx.fetcher(
       {
         method: "GET",
-        urlPaths: ["api/data"],
+        path: "/api/data",
         headers: {
           "Authorization": `Bearer ${token}`,
         },

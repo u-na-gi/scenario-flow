@@ -56,7 +56,7 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
     // Step 1: Login
     const loginStep: ScenarioFlowStepFunction = async (ctx) => {
       const request: ScenarioFlowRequest = {
-        urlPaths: ["auth", "login"],
+        path: "/auth/login",
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: "testuser", password: "testpass" }),
@@ -75,7 +75,7 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
       const token = ctx.getContext<string>("authToken");
 
       const request: ScenarioFlowRequest = {
-        urlPaths: ["users", userId as string],
+        path: `/users/${userId as string}`,
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -94,7 +94,7 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
       const token = ctx.getContext<string>("authToken");
 
       const request: ScenarioFlowRequest = {
-        urlPaths: ["data"],
+        path: "/data",
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -225,7 +225,7 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
 
     const step1: ScenarioFlowStepFunction = async (ctx) => {
       const request: ScenarioFlowRequest = {
-        urlPaths: ["step1"],
+        path: "/step1",
         method: "GET",
       };
       await ctx.fetcher(request);
@@ -234,7 +234,7 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
 
     const step2: ScenarioFlowStepFunction = async (ctx) => {
       const request: ScenarioFlowRequest = {
-        urlPaths: ["step2"],
+        path: "/step2",
         method: "GET",
       };
       await ctx.fetcher(request); // This will fail
@@ -324,7 +324,7 @@ Deno.test("Integration - createCtx function with ScenarioFlow", async () => {
 
   // Test that the context works with the fetcher
   const request: ScenarioFlowRequest = {
-    urlPaths: ["test"],
+    path: "/test",
     method: "GET",
   };
 
