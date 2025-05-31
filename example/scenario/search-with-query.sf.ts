@@ -19,7 +19,7 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
     if (res.ok) {
       const data = await res.json();
       console.log("検索結果:", data);
-      
+
       // Validate response structure
       if (data.query !== "test") {
         throw new Error(`Expected query 'test', got '${data.query}'`);
@@ -33,7 +33,7 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
       if (!Array.isArray(data.results)) {
         throw new Error("Expected results to be an array");
       }
-      
+
       console.log("クエリパラメータテスト成功");
     } else {
       throw new Error(`Search request failed with status: ${res.status}`);
@@ -56,15 +56,17 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
     if (res.ok) {
       const data = await res.json();
       console.log("2回目の検索結果:", data);
-      
+
       // Validate that limit is respected
       if (data.results.length > 2) {
         throw new Error(`Expected max 2 results, got ${data.results.length}`);
       }
-      
+
       console.log("異なるパラメータでのテスト成功");
     } else {
-      throw new Error(`Second search request failed with status: ${res.status}`);
+      throw new Error(
+        `Second search request failed with status: ${res.status}`,
+      );
     }
   })
   .step("Search without query parameter", async (ctx) => {
@@ -84,7 +86,7 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
     if (res.ok) {
       const data = await res.json();
       console.log("パラメータなしの検索結果:", data);
-      
+
       // Should use default values
       if (data.query !== "") {
         throw new Error(`Expected empty query, got '${data.query}'`);
@@ -93,12 +95,16 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
         throw new Error(`Expected default limit 10, got ${data.limit}`);
       }
       if (data.category !== "all") {
-        throw new Error(`Expected default category 'all', got '${data.category}'`);
+        throw new Error(
+          `Expected default category 'all', got '${data.category}'`,
+        );
       }
-      
+
       console.log("デフォルト値テスト成功");
     } else {
-      throw new Error(`Default search request failed with status: ${res.status}`);
+      throw new Error(
+        `Default search request failed with status: ${res.status}`,
+      );
     }
   });
 
