@@ -13,7 +13,7 @@ jobs:
 
     strategy:
       matrix:
-        deno-version: ["1.41.x", "latest"]
+        deno-version: ["latest"]
 
     steps:
       - name: Checkout code
