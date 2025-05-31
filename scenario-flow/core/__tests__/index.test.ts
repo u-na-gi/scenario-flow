@@ -207,7 +207,7 @@ Deno.test("ScenarioFlow - URL joining works correctly", async () => {
 
     const stepFunction: ScenarioFlowStepFunction = async (ctx) => {
       const request: ScenarioFlowRequest = {
-        urlPaths: ["users", "123", "profile"],
+        path: "/users/123/profile",
         method: "GET",
       };
       await ctx.fetcher(request);
@@ -244,7 +244,7 @@ Deno.test("ScenarioFlow - URL joining handles various formats", async () => {
 
     const stepFunction: ScenarioFlowStepFunction = async (ctx) => {
       const request: ScenarioFlowRequest = {
-        urlPaths: ["/api/", "/v1/", "/data/"], // Leading and trailing slashes
+        path: "/api/v1/data/", // Leading and trailing slashes
         method: "GET",
       };
       await ctx.fetcher(request);
@@ -279,7 +279,7 @@ Deno.test("ScenarioFlow - fetcher handles HTTP errors", async () => {
 
     const stepFunction: ScenarioFlowStepFunction = async (ctx) => {
       const request: ScenarioFlowRequest = {
-        urlPaths: ["not-found"],
+        path: "/not-found",
         method: "GET",
       };
       await ctx.fetcher(request);

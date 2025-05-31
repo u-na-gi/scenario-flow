@@ -36,9 +36,10 @@ Deno.test("CLI finds .sf.ts files", async () => {
   const output = new TextDecoder().decode(stdout);
 
   assertEquals(code, 0);
-  assertEquals(output.includes("Found 2 .sf.ts files:"), true);
+  assertEquals(output.includes("Found 3 .sf.ts files:"), true);
   assertEquals(output.includes("login.sf.ts"), true);
   assertEquals(output.includes("get-data.sf.ts"), true);
+  assertEquals(output.includes("search-with-query.sf.ts"), true);
   // Check for improved logging output
   assertEquals(output.includes("🔍 Searching for"), true);
   assertEquals(output.includes("📄"), true);

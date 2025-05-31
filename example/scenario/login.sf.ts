@@ -6,7 +6,7 @@ export const login = new ScenarioFlow("User Login", {
   const res = await ctx.fetcher(
     {
       method: "POST",
-      urlPaths: ["login"],
+      path: "/login",
       headers: {
         "Content-Type": "application/json",
       },

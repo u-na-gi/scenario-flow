@@ -131,14 +131,14 @@ Deno.test("ScenarioFlowContext - fetcher function works", async () => {
   const mockResponse = new Response("mock response", { status: 200 });
   const mockFetcher = async (req: ScenarioFlowRequest): Promise<Response> => {
     await Promise.resolve(); // Simulate async operation
-    assertEquals(req.urlPaths, ["test", "path"]);
+    assertEquals(req.path, "/test/path");
     return mockResponse;
   };
 
   const ctx = createCtx(mockFetcher, config);
 
   const request: ScenarioFlowRequest = {
-    urlPaths: ["test", "path"],
+    path: "/test/path",
     method: "GET",
   };
 
