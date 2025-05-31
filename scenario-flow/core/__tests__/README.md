@@ -1,6 +1,7 @@
 # scenario-flow/core Test Suite
 
-This directory contains comprehensive unit tests for the scenario-flow core modules.
+This directory contains comprehensive unit tests for the scenario-flow core
+modules.
 
 ## Test Structure
 
@@ -10,7 +11,8 @@ This directory contains comprehensive unit tests for the scenario-flow core modu
 - **`index.test.ts`** - Tests for the main ScenarioFlow class
 - **`type.test.ts`** - Tests for type definitions and interfaces
 - **`store.test.ts`** - Tests for the store module
-- **`integration.test.ts`** - Integration tests that test modules working together
+- **`integration.test.ts`** - Integration tests that test modules working
+  together
 
 ## Test Coverage
 

@@ -8,18 +8,28 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
   const originalFetch = globalThis.fetch;
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
 
-  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
     fetchCalls.push({ url: url.toString(), init });
 
     // Simulate different responses based on URL
     if (url.toString().includes("/login")) {
-      return new Response(JSON.stringify({ token: "abc123", userId: "user1" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ token: "abc123", userId: "user1" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     } else if (url.toString().includes("/users/user1")) {
       return new Response(
-        JSON.stringify({ id: "user1", name: "Test User", email: "test@example.com" }),
+        JSON.stringify({
+          id: "user1",
+          name: "Test User",
+          email: "test@example.com",
+        }),
         {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -127,7 +137,10 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
 Deno.test("Integration - ScenarioFlow chaining with context sharing", async () => {
   // Mock fetch globally for this test
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   };
 
@@ -185,7 +198,10 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
   const originalFetch = globalThis.fetch;
   let callCount = 0;
 
-  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
     callCount++;
     if (callCount === 2) {
       // Second call fails
@@ -242,7 +258,10 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
 Deno.test("Integration - Context isolation between different ScenarioFlow instances", async () => {
   // Mock fetch globally for this test
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   };
 

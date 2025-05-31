@@ -88,7 +88,9 @@ export class ScenarioFlow implements ScenarioFlowChain {
   }
 
   private joinUrl(...parts: string[]): string {
-    const clean = [this.config.apiBaseUrl, ...parts].map((p) => p.replace(/^\/+|\/+$/g, ""));
+    const clean = [this.config.apiBaseUrl, ...parts].map((p) =>
+      p.replace(/^\/+|\/+$/g, "")
+    );
     return clean.join("/");
   }
 

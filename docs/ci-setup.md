@@ -1,10 +1,13 @@
 # CI/CD Setup for Scenario Flow
 
-This document describes the Continuous Integration setup for the Scenario Flow project.
+This document describes the Continuous Integration setup for the Scenario Flow
+project.
 
 ## Overview
 
-The project uses GitHub Actions for automated testing, linting, and coverage reporting. The CI pipeline runs on every push and pull request to the main and develop branches.
+The project uses GitHub Actions for automated testing, linting, and coverage
+reporting. The CI pipeline runs on every push and pull request to the main and
+develop branches.
 
 ## CI Pipeline Components
 
@@ -14,7 +17,8 @@ The workflow includes three main jobs:
 
 #### Test Job
 
-- **Matrix Strategy**: Tests against multiple Deno versions (1.40.x, 1.41.x, latest)
+- **Matrix Strategy**: Tests against multiple Deno versions (1.40.x, 1.41.x,
+  latest)
 - **Code Quality**: Runs formatting checks and linting
 - **Core Tests**: Executes 41 unit tests for scenario-flow/core with coverage
 - **CLI Tests**: Tests the command-line interface functionality

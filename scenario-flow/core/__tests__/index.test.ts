@@ -4,7 +4,10 @@ import { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
 
 // Mock fetch function for testing
 const createMockFetch = (mockResponse?: Response, shouldThrow = false) => {
-  return async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  return async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
     if (shouldThrow) {
       throw new Error("Network error");
     }
@@ -176,7 +179,10 @@ Deno.test("ScenarioFlow - URL joining works correctly", async () => {
   const originalFetch = globalThis.fetch;
   let capturedUrl = "";
 
-  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
     capturedUrl = url.toString();
     return new Response("mock response", { status: 200 });
   };
@@ -210,7 +216,10 @@ Deno.test("ScenarioFlow - URL joining handles various formats", async () => {
   const originalFetch = globalThis.fetch;
   let capturedUrl = "";
 
-  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
     capturedUrl = url.toString();
     return new Response("mock response", { status: 200 });
   };
@@ -242,7 +251,10 @@ Deno.test("ScenarioFlow - URL joining handles various formats", async () => {
 Deno.test("ScenarioFlow - fetcher handles HTTP errors", async () => {
   // Mock fetch to return error response
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
     return new Response("Not Found", { status: 404 });
   };
 
