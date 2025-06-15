@@ -1,0 +1,51 @@
+name: Publish to JSR
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scenario-flow/**'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Run tests
+        run: |
+          cd scenario-flow
+          deno test --coverage=coverage
+
+      - name: Check formatting
+        run: |
+          cd scenario-flow
+          deno fmt --check
+
+      - name: Lint code
+        run: |
+          cd scenario-flow
+          deno lint
+
+      - name: Dry run publish
+        run: |
+          cd scenario-flow
+          deno publish --dry-run
+
+      - name: Publish to JSR
+        run: |
+          cd scenario-flow
+          deno publish
