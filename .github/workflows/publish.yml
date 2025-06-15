@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'scenario-flow/**'
+      - "scenario-flow/**"
   workflow_dispatch:
 
 jobs:
