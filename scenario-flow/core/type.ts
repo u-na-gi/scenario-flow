@@ -31,7 +31,7 @@ import type { ScenarioFlowContext } from "./context.ts";
 /**
  * Function type for scenario steps.
  * Receives the scenario context and should return a Promise.
- * 
+ *
  * @param ctx - The scenario context with HTTP client and shared state
  * @returns Promise that resolves when the step completes
  */

@@ -39,11 +39,11 @@ export type { ScenarioFlowStepFunction } from "./type.ts";
 /**
  * Main class for creating and executing test scenarios.
  * Provides a fluent API for building chains of API calls with automatic logging.
- * 
+ *
  * @example
  * ```typescript
  * const scenario = new ScenarioFlow("Login Flow", { apiBaseUrl: "https://api.example.com" });
- * 
+ *
  * await scenario
  *   .step("Login", async (ctx) => {
  *     const response = await ctx.fetcher({ path: "/auth/login", method: "POST" });
