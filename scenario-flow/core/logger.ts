@@ -23,15 +23,29 @@ const colors = {
   bgCyan: "\x1b[46m",
 };
 
+/**
+ * Information about a scenario step for logging.
+ * @internal
+ */
 export interface StepInfo {
+  /** Step name */
   name: string;
+  /** Start time in milliseconds */
   startTime: number;
+  /** End time in milliseconds */
   endTime?: number;
+  /** Duration in milliseconds */
   duration?: number;
 }
 
+/**
+ * Information about a scenario for logging.
+ * @internal
+ */
 export interface ScenarioInfo {
+  /** Scenario name */
   name: string;
+  /** File path if applicable */
   filePath?: string;
   startTime: number;
   endTime?: number;
@@ -40,6 +54,10 @@ export interface ScenarioInfo {
   success: boolean;
 }
 
+/**
+ * Logger for scenario execution with colored console output.
+ * Provides automatic logging of HTTP requests, responses, and timing.
+ */
 export class ScenarioLogger {
   private currentScenario: ScenarioInfo | null = null;
   private currentStep: StepInfo | null = null;
@@ -290,5 +308,8 @@ export class ScenarioLogger {
   }
 }
 
-// Global logger instance
+/**
+ * Global logger instance for scenario execution.
+ * Provides automatic request/response logging with timing and formatting.
+ */
 export const logger: ScenarioLogger = new ScenarioLogger();

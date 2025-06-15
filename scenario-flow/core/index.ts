@@ -7,22 +7,69 @@ import type {
 } from "./type.ts";
 import { logger } from "./logger.ts";
 
+/**
+ * Interface for chaining scenario steps together.
+ * Provides a fluent API for building test scenarios.
+ */
 export interface ScenarioFlowChain {
+  /**
+   * Add a step to the scenario chain.
+   * @param name - Descriptive name for the step
+   * @param fn - Function to execute for this step
+   * @returns The chain for method chaining
+   */
   step(name: string, fn: ScenarioFlowStepFunction): ScenarioFlowChain;
+  /**
+   * Add another scenario chain as a step.
+   * @param parent - Another scenario chain to execute
+   * @returns The chain for method chaining
+   */
   step(parent: ScenarioFlowChain): ScenarioFlowChain;
+  /**
+   * Execute all steps in the scenario.
+   * @returns Promise that resolves when all steps complete
+   */
   execute(): Promise<void>;
 }
 
 // Re-export the type from type.ts
+/** Function type for scenario steps */
 export type { ScenarioFlowStepFunction } from "./type.ts";
 
+/**
+ * Main class for creating and executing test scenarios.
+ * Provides a fluent API for building chains of API calls with automatic logging.
+ * 
+ * @example
+ * ```typescript
+ * const scenario = new ScenarioFlow("Login Flow", { apiBaseUrl: "https://api.example.com" });
+ * 
+ * await scenario
+ *   .step("Login", async (ctx) => {
+ *     const response = await ctx.fetcher({ path: "/auth/login", method: "POST" });
+ *     const data = await response.json();
+ *     ctx.addContext("token", data.token);
+ *   })
+ *   .execute();
+ * ```
+ */
 export class ScenarioFlow implements ScenarioFlowChain {
   private scenarioName: string;
   private config: ScenarioFlowConfig;
   private ctx: ScenarioFlowContext;
   private steps: NamedStep[] = [];
 
+  /**
+   * Create a new scenario with configuration.
+   * @param name - Descriptive name for the scenario
+   * @param config - Configuration object with apiBaseUrl
+   */
   constructor(name: string, config: ScenarioFlowConfig);
+  /**
+   * Create a new scenario by chaining another scenario.
+   * @param name - Descriptive name for the scenario
+   * @param scenarioFlowChain - Another scenario to chain
+   */
   constructor(name: string, scenarioFlowChain: ScenarioFlowChain);
   constructor(name: string, arg: ScenarioFlowConfig | ScenarioFlowChain) {
     this.scenarioName = name;
@@ -94,7 +141,18 @@ export class ScenarioFlow implements ScenarioFlowChain {
     return clean.join("/");
   }
 
+  /**
+   * Add a step to the scenario.
+   * @param name - Step name for logging
+   * @param fn - Function to execute
+   * @returns The scenario chain for method chaining
+   */
   step(name: string, fn: ScenarioFlowStepFunction): ScenarioFlowChain;
+  /**
+   * Add another scenario as a step.
+   * @param parent - Another scenario to execute
+   * @returns The scenario chain for method chaining
+   */
   step(parent: ScenarioFlowChain): ScenarioFlowChain;
   step(
     nameOrParent: string | ScenarioFlowChain,
@@ -134,6 +192,11 @@ export class ScenarioFlow implements ScenarioFlowChain {
     }
   }
 
+  /**
+   * Execute all steps in the scenario.
+   * Logs the scenario execution and handles errors appropriately.
+   * @throws Error if any step fails
+   */
   async execute(): Promise<void> {
     try {
       await this.run();
