@@ -1,6 +1,6 @@
 {
   "name": "@u-na-gi/scenario-flow",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "A TypeScript library for scenario-based testing and automation",
   "exports": "./mod.ts",
   "imports": {
