@@ -1,16 +1,23 @@
 import { assertEquals } from "@std/assert";
 
+
+
 Deno.test("CLI help functionality", async () => {
+  console.log(`Testing CLI help functionality...`, Deno.cwd());
   const process = new Deno.Command("deno", {
     args: ["run", "--allow-read", "--allow-run", "main.ts", "-h"],
     cwd: Deno.cwd(),
     stdout: "piped",
     stderr: "piped",
-  });
+  }).spawn();
+
+  console.log(`Running CLI help test...`);
 
   const { code, stdout } = await process.output();
+  console.log(`CLI help output: ${new TextDecoder().decode(stdout)}`);
   const output = new TextDecoder().decode(stdout);
 
+  console.log(`CLI help code: ${code}`);
   assertEquals(code, 0);
   assertEquals(output.includes("scenario-flow-cli (sfcli)"), true);
   assertEquals(output.includes("USAGE:"), true);

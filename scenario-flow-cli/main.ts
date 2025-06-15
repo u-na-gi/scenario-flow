@@ -86,7 +86,7 @@ async function main(): Promise<void> {
   // Handle help flag
   if (args.includes("-h") || args.includes("--help")) {
     printHelp();
-    return;
+    return Deno.exit(0);
   }
 
   // Determine the directory to search
@@ -110,6 +110,8 @@ async function main(): Promise<void> {
   const startTime = performance.now();
   let successCount = 0;
 
+  console.log("🚀 Executing scenario files...")
+  // シナリオの塊ごとに実行される、ただし、ログが混ざってはいけない;
   for (const file of scenarioFiles) {
     const success = await executeScenarioFile(file);
     if (success) {
