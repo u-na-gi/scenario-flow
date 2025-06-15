@@ -1,4 +1,4 @@
-import { ScenarioFlowConfig, ScenarioFlowRequest } from "./type.ts";
+import type { ScenarioFlowConfig, ScenarioFlowRequest } from "./type.ts";
 
 export interface ScenarioFlowContext {
   fetcher: (req: ScenarioFlowRequest) => Promise<Response>;

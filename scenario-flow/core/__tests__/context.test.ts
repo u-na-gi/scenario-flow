@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { createCtx } from "../context.ts";
-import { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
+import type { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
 
 Deno.test("ScenarioFlowContext - createCtx creates context correctly", () => {
   const config: ScenarioFlowConfig = {

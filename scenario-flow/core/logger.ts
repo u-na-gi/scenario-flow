@@ -291,4 +291,4 @@ export class ScenarioLogger {
 }
 
 // Global logger instance
-export const logger = new ScenarioLogger();
+export const logger: ScenarioLogger = new ScenarioLogger();

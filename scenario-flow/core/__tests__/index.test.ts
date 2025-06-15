@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
-import { ScenarioFlow, ScenarioFlowStepFunction } from "../index.ts";
-import { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
+import { ScenarioFlow, type ScenarioFlowStepFunction } from "../index.ts";
+import type { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
 
 // Mock fetch function for testing
 const createMockFetch = (mockResponse?: Response, shouldThrow = false) => {
