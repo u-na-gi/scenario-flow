@@ -42,12 +42,7 @@ jobs:
           cd scenario-flow
           deno lint
 
-      - name: Dry run publish
-        run: |
-          cd scenario-flow
-          deno publish --dry-run
-
       - name: Publish to JSR
         run: |
           cd scenario-flow
-          deno publish
+          npx jsr publish
