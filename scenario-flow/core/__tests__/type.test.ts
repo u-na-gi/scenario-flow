@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
+import type { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
 
 Deno.test("ScenarioFlowConfig - interface structure", () => {
   const config: ScenarioFlowConfig = {

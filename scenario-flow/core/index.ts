@@ -1,5 +1,5 @@
-import { createCtx, ScenarioFlowContext } from "./context.ts";
-import {
+import { createCtx, type ScenarioFlowContext } from "./context.ts";
+import type {
   NamedStep,
   ScenarioFlowConfig,
   ScenarioFlowRequest,
