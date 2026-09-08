@@ -90,12 +90,38 @@ jobs:
         run: |
           cd example
           # Check if example files are valid TypeScript
-          deno check scenario/sample-api1/*.sf.ts
+          deno check scenario/*.sf.ts
+
+      - name: Start sample API server
+        run: |
+          cd example
+          deno run -A sample-api/server.ts > server.log 2>&1 &
+          echo $! > server.pid
+          # Wait until the server answers on port 3323 (max 30s)
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null -X POST -H 'Content-Type: application/json' \
+                 -d '{}' http://localhost:3323/login; then
+              echo "sample server is up (attempt $i)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "sample server did not start in time"
+          cat server.log
+          exit 1
 
       - name: Validate scenario-flow-cli with examples
         run: |
           cd scenario-flow-cli
           deno run --allow-read --allow-run --allow-net main.ts ../example
+
+      - name: Stop sample API server
+        if: always()
+        run: |
+          cd example
+          if [ -f server.pid ]; then
+            kill "$(cat server.pid)" || true
+          fi
 
   security-audit:
     name: Security Audit

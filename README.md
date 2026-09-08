@@ -229,8 +229,9 @@ cd scenario-flow
 # Run all tests
 deno task test
 
-# Run examples
+# Run examples (the sample API server must be running on localhost:3323)
 cd example
+deno task server:start   # in another terminal
 deno task test
 
 # Run CLI tests
