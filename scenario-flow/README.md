@@ -45,7 +45,7 @@ await scenario
     });
 
     const data = await response.json();
-    ctx.addContext("authToken", data.token);
+    ctx.setContext("authToken", data.token);
   })
   .step("Get user profile", async (ctx) => {
     const token = ctx.getContext<string>("authToken");
@@ -96,7 +96,7 @@ Execute all steps in the scenario.
 The context object passed to each step provides:
 
 - `fetcher(request)`: Make HTTP requests
-- `addContext(key, value)`: Store data for later steps
+- `setContext(key, value)`: Store data for later steps
 - `getContext<T>(key)`: Retrieve stored data
 - `getConfig()`: Get the scenario configuration
 

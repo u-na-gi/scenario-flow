@@ -19,7 +19,7 @@ export const login = new ScenarioFlow("User Login", {
 
   if (res.ok) {
     const data = await res.json();
-    ctx.addContext("token", data.token);
+    ctx.setContext("token", data.token);
   }
 });
 

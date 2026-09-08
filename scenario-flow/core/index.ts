@@ -48,7 +48,7 @@ export type { ScenarioFlowStepFunction } from "./type.ts";
  *   .step("Login", async (ctx) => {
  *     const response = await ctx.fetcher({ path: "/auth/login", method: "POST" });
  *     const data = await response.json();
- *     ctx.addContext("token", data.token);
+ *     ctx.setContext("token", data.token);
  *   })
  *   .execute();
  * ```

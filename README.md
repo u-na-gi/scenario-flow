@@ -66,7 +66,7 @@ export const login = new ScenarioFlow({
   if (res.ok) {
     const data = await res.json();
     console.log("Login successful:", data);
-    ctx.addContext("token", data.token);
+    ctx.setContext("token", data.token);
   }
 });
 
@@ -116,7 +116,7 @@ const apiTest = new ScenarioFlow({
     });
 
     const { token } = await loginRes.json();
-    ctx.addContext("authToken", token);
+    ctx.setContext("authToken", token);
   })
   .step(async (ctx) => {
     // Second step: Get user data

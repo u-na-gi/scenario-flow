@@ -16,6 +16,7 @@ Deno.test("ScenarioFlowContext - createCtx creates context correctly", () => {
 
   assertEquals(typeof ctx.fetcher, "function");
   assertEquals(typeof ctx.customContext, "object");
+  assertEquals(typeof ctx.setContext, "function");
   assertEquals(typeof ctx.addContext, "function");
   assertEquals(typeof ctx.getContext, "function");
   assertEquals(typeof ctx.merge, "function");
@@ -39,7 +40,7 @@ Deno.test("ScenarioFlowContext - getConfig returns correct config", () => {
   assertEquals(retrievedConfig.apiBaseUrl, "https://api.example.com");
 });
 
-Deno.test("ScenarioFlowContext - addContext and getContext work correctly", () => {
+Deno.test("ScenarioFlowContext - setContext and getContext work correctly", () => {
   const config: ScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
@@ -52,20 +53,36 @@ Deno.test("ScenarioFlowContext - addContext and getContext work correctly", () =
   const ctx = createCtx(mockFetcher, config);
 
   // Test adding and getting string value
-  ctx.addContext("testKey", "testValue");
+  ctx.setContext("testKey", "testValue");
   assertEquals(ctx.getContext("testKey"), "testValue");
 
   // Test adding and getting object value
   const testObject = { name: "test", value: 123 };
-  ctx.addContext("objectKey", testObject);
+  ctx.setContext("objectKey", testObject);
   assertEquals(ctx.getContext("objectKey"), testObject);
 
   // Test adding and getting number value
-  ctx.addContext("numberKey", 42);
+  ctx.setContext("numberKey", 42);
   assertEquals(ctx.getContext("numberKey"), 42);
 
   // Test getting non-existent key
   assertEquals(ctx.getContext("nonExistentKey"), undefined);
+});
+
+Deno.test("ScenarioFlowContext - addContext is a deprecated alias of setContext", () => {
+  const config: ScenarioFlowConfig = {
+    apiBaseUrl: "https://api.example.com",
+  };
+
+  const mockFetcher = async (_req: ScenarioFlowRequest): Promise<Response> => {
+    await Promise.resolve(); // Simulate async operation
+    return new Response("test");
+  };
+
+  const ctx = createCtx(mockFetcher, config);
+
+  ctx.addContext("legacyKey", "legacyValue");
+  assertEquals(ctx.getContext("legacyKey"), "legacyValue");
 });
 
 Deno.test("ScenarioFlowContext - getContext with generic type", () => {
@@ -86,7 +103,7 @@ Deno.test("ScenarioFlowContext - getContext with generic type", () => {
   }
 
   const testData: TestInterface = { id: 1, name: "test" };
-  ctx.addContext("typedKey", testData);
+  ctx.setContext("typedKey", testData);
 
   const retrieved = ctx.getContext<TestInterface>("typedKey") as TestInterface;
   assertEquals(retrieved.id, 1);
@@ -107,11 +124,11 @@ Deno.test("ScenarioFlowContext - merge combines contexts correctly", () => {
   const ctx2 = createCtx(mockFetcher, config);
 
   // Add different data to each context
-  ctx1.addContext("key1", "value1");
-  ctx1.addContext("shared", "original");
+  ctx1.setContext("key1", "value1");
+  ctx1.setContext("shared", "original");
 
-  ctx2.addContext("key2", "value2");
-  ctx2.addContext("shared", "overwritten");
+  ctx2.setContext("key2", "value2");
+  ctx2.setContext("shared", "overwritten");
 
   // Merge ctx2 into ctx1
   ctx1.merge(ctx2);
@@ -175,14 +192,14 @@ Deno.test("ScenarioFlowContext - context overwrite behavior", () => {
   const ctx = createCtx(mockFetcher, config);
 
   // Add initial value
-  ctx.addContext("key", "initialValue");
+  ctx.setContext("key", "initialValue");
   assertEquals(ctx.getContext("key"), "initialValue");
 
   // Overwrite with new value
-  ctx.addContext("key", "newValue");
+  ctx.setContext("key", "newValue");
   assertEquals(ctx.getContext("key"), "newValue");
 
   // Overwrite with different type
-  ctx.addContext("key", 123);
+  ctx.setContext("key", 123);
   assertEquals(ctx.getContext("key"), 123);
 });

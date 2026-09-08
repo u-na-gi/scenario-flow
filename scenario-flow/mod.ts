@@ -28,7 +28,7 @@
  *       body: JSON.stringify({ email: "user@example.com", password: "password123" })
  *     });
  *     const data = await response.json();
- *     ctx.addContext("authToken", data.token);
+ *     ctx.setContext("authToken", data.token);
  *   })
  *   .step("Get user profile", async (ctx) => {
  *     const token = ctx.getContext<string>("authToken");

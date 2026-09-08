@@ -14,6 +14,13 @@ export interface ScenarioFlowContext {
    * @param key - Context key
    * @param value - Value to store
    */
+  setContext(key: string, value: unknown): void;
+  /**
+   * Store data in the context for use in later steps.
+   * @deprecated Use {@link ScenarioFlowContext.setContext} instead.
+   * @param key - Context key
+   * @param value - Value to store
+   */
   addContext(key: string, value: unknown): void;
   /**
    * Retrieve data from the context.
@@ -51,8 +58,13 @@ class ScenarioFlowContextImple implements ScenarioFlowContext {
     return this.config;
   }
 
-  addContext(key: string, value: unknown) {
+  setContext(key: string, value: unknown) {
     this.customContext[key] = value;
+  }
+
+  /** @deprecated Use {@link setContext} instead. */
+  addContext(key: string, value: unknown) {
+    this.setContext(key, value);
   }
 
   getContext<T>(key: string): T | unknown {
