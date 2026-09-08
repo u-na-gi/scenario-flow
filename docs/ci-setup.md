@@ -132,6 +132,58 @@ The project README includes status badges for:
 - Can be triggered manually from GitHub Actions tab
 - Useful for testing CI changes
 
+## CI
+
+### Owner-only gating
+
+The repository is public, but GitHub Actions is intended to run only for the
+repository owner. Both workflows (`test.yml`, `publish.yml`) apply the same
+guard to every job:
+
+```yaml
+if: >-
+  github.actor == github.repository_owner &&
+  (github.event_name != 'pull_request' ||
+  github.event.pull_request.head.repo.full_name == github.repository)
+```
+
+- Pushes, tag pushes and `workflow_dispatch` runs triggered by anyone other than
+  the owner are skipped (every job is a no-op).
+- Pull requests are additionally required to originate from a branch of this
+  repository. A PR opened from a fork does not run any job, so fork code never
+  executes with this repository's context.
+
+Further hardening applied in the workflow files:
+
+- Top-level `permissions: contents: read`; only the `publish` job adds
+  `id-token: write` (OIDC for JSR, so no long-lived publish token is stored).
+- `pull_request_target` is never used.
+- Steps do not print environment variables (`env`, `printenv`, `set -x`) and no
+  `SF_*` variable is set in CI; tests only talk to `localhost`.
+- The Codecov upload is token-less with `fail_ci_if_error: false`, so no secret
+  is passed to that step.
+- Every third-party action is pinned to a full commit SHA with the version in a
+  trailing comment. When upgrading, resolve the new SHA and update the comment.
+- `concurrency` groups cancel superseded test runs; publish runs are serialised
+  but never cancelled mid-flight.
+
+### Repository settings (owner action, not in code)
+
+These settings cannot be expressed in the workflow files and must be applied by
+the owner in the GitHub UI:
+
+1. **Settings → Actions → General → Fork pull request workflows from outside
+   collaborators**: select **Require approval for all outside collaborators**.
+2. **Settings → Actions → General → Workflow permissions**: select **Read
+   repository contents and packages permissions** (and leave "Allow GitHub
+   Actions to create and approve pull requests" unchecked).
+3. **Settings → Rules → Rulesets**: add a tag ruleset targeting `v*` that
+   restricts creation/update/deletion to the repository owner. This is what
+   actually protects `publish.yml`, because the workflow runs on `v*` tag
+   pushes.
+4. Keep repository secrets minimal. JSR publishing uses OIDC, so no publish
+   token is required; the Codecov upload runs token-less.
+
 ## Best Practices
 
 ### For Contributors
