@@ -50,7 +50,7 @@ export interface ScenarioFlowRequest extends RequestInit {
    * When omitted, any non-2xx status is treated as an error.
    * An empty array is rejected with an error before the request is sent.
    */
-  expectStatus?: number | readonly number[];
+  expectStatus?: ExpectedStatus;
   /**
    * Whether to throw when the response status does not meet the expectation.
    * Set to `false` to always get the `Response` back and inspect it yourself.
@@ -65,6 +65,7 @@ export interface ScenarioFlowRequest extends RequestInit {
 
 // Import the context type to use in the step function
 import type { ContextRecord, ScenarioFlowContext } from "./context.ts";
+import type { ExpectedStatus } from "./status.ts";
 
 /**
  * Internal interface for a named scenario step.

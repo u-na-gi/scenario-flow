@@ -20,23 +20,32 @@ curl -fsSL https://deno.land/install.sh | sh
 
 ### Scenario Flow Library
 
-Add the library to your project's `deno.json`:
+The library is published to JSR as
+[`@u-na-gi/scenario-flow`](https://jsr.io/@u-na-gi/scenario-flow). Add it to
+your project:
 
-```json
-{
-  "imports": {
-    "scenario-flow": "https://raw.githubusercontent.com/u-na-gi/scenario-flow/main/scenario-flow/mod.ts"
-  }
-}
+```bash
+deno add jsr:@u-na-gi/scenario-flow
+```
+
+and import it as `@u-na-gi/scenario-flow`:
+
+```typescript
+import { ScenarioFlow } from "@u-na-gi/scenario-flow";
 ```
 
 ### Scenario Flow CLI
 
-Install the CLI tool globally:
+The `sfcli` command is installed from a clone of this repository:
 
 ```bash
-deno install --global -A -n sfcli https://raw.githubusercontent.com/u-na-gi/scenario-flow/main/scenario-flow-cli/main.ts
+git clone https://github.com/u-na-gi/scenario-flow.git
+cd scenario-flow/scenario-flow-cli
+deno task install
 ```
+
+This runs `deno install --global --allow-read --allow-run -n sfcli main.ts`. See
+[scenario-flow-cli/README.md](scenario-flow-cli/README.md) for details.
 
 ## Usage
 
@@ -45,7 +54,7 @@ deno install --global -A -n sfcli https://raw.githubusercontent.com/u-na-gi/scen
 Create a scenario file (e.g., `login.sf.ts`):
 
 ```typescript
-import { ScenarioFlow } from "scenario-flow";
+import { ScenarioFlow } from "@u-na-gi/scenario-flow";
 
 // Declare the context shape: setContext / getContext are typed by it
 export type LoginCtx = { token: string };
@@ -80,7 +89,7 @@ if (import.meta.main) {
 Another scenario can build on `login` (e.g. `get-data.sf.ts`):
 
 ```typescript
-import { ScenarioFlow } from "scenario-flow";
+import { ScenarioFlow } from "@u-na-gi/scenario-flow";
 import { login } from "./login.sf.ts";
 
 // Inherits login's steps and context type; use login.extend<Own>(name)
@@ -187,7 +196,7 @@ See [scenario-flow-cli/README.md](scenario-flow-cli/README.md) for all options.
 ### Basic API Test
 
 ```typescript
-import { ScenarioFlow } from "scenario-flow";
+import { ScenarioFlow } from "@u-na-gi/scenario-flow";
 
 const apiTest = new ScenarioFlow("API Test", {
   apiBaseUrl: "https://api.example.com/",
@@ -229,49 +238,57 @@ if (import.meta.main) {
 ```bash
 # Create your scenario files
 mkdir scenarios
-echo 'import { ScenarioFlow } from "scenario-flow"; ...' > scenarios/test.sf.ts
+echo 'import { ScenarioFlow } from "@u-na-gi/scenario-flow"; ...' > scenarios/test.sf.ts
 
 # Run all scenarios
 sfcli scenarios
 
 # Output:
-# Searching for .sf.ts files in: scenarios
-# Found 1 .sf.ts files:
-# - /path/to/scenarios/test.sf.ts
-# Executing: /path/to/scenarios/test.sf.ts
-# Successfully executed: /path/to/scenarios/test.sf.ts
-# Execution summary: 1/1 files executed successfully.
+# 🔍 Searching for .sf.ts files in: scenarios
+# ✅ Found 1 .sf.ts files:
+#   📄 /path/to/scenarios/test.sf.ts
+#
+# ▶ Running: /path/to/scenarios/test.sf.ts
+# ... scenario and step logs ...
+#
+# ============================================================
+# 📊 EXECUTION SUMMARY
+# ============================================================
+# 🎉 1/1 scenarios executed successfully
+# ⏱️  Total execution time: 1.2s
+# ============================================================
 ```
 
 ## Testing
 
-This project includes comprehensive unit tests for all core modules.
+This project includes unit and integration tests for the library and the CLI.
 
 ### Running Tests
 
+Run from the repository root:
+
 ```bash
-# Run all tests
-deno task test
+# Format and lint (CI runs `deno fmt --check`)
+deno fmt
+deno lint
 
-# Run core library tests with coverage
-deno task test:core
+# Core library tests (tests that need net/env/read are skipped without
+# these flags, so a bare `deno test` also passes)
+cd scenario-flow && deno test --allow-net --allow-read --allow-env
 
-# Run CLI tests
-deno task test:cli
+# CLI tests
+cd scenario-flow-cli && deno task test
 
-# Generate coverage report
-deno task test:coverage
-
-# Run CI pipeline locally
-deno task ci
+# Type-check the public API and the example scenarios
+deno check scenario-flow/mod.ts example/scenario/*.sf.ts
 ```
 
 ### Test Coverage
 
 The test suite includes:
 
-- **41 unit tests** covering all core functionality
-- **Integration tests** for real-world scenarios
+- **Unit tests** covering the core functionality
+- **Integration tests** for real-world scenarios against a local server
 - **Error handling tests** for robust error management
 - **Type safety tests** for TypeScript compliance
 - **Mock-based testing** for isolated unit testing
@@ -279,7 +296,7 @@ The test suite includes:
 Test files are located in:
 
 - `scenario-flow/core/__tests__/` - Core library tests
-- `scenario-flow-cli/__tests__/main_test.ts` - CLI functionality tests
+- `scenario-flow-cli/main_test.ts` - CLI functionality tests
 
 ## Development
 
@@ -290,8 +307,10 @@ Test files are located in:
 git clone https://github.com/u-na-gi/scenario-flow.git
 cd scenario-flow
 
-# Run all tests
-deno task test
+# Run the library tests
+cd scenario-flow
+deno test --allow-net --allow-read --allow-env
+cd ..
 
 # Run examples (the sample API server must be running on localhost:3323)
 cd example

@@ -62,6 +62,7 @@ export function formatAssertValue(value: unknown): string {
  * inside the current STEP block.
  */
 export class ScenarioAssertionError extends Error {
+  /** Always `"ScenarioAssertionError"`. */
   override readonly name = "ScenarioAssertionError";
   /** The expected value (as passed to the helper). */
   readonly expected: unknown;
@@ -76,6 +77,12 @@ export class ScenarioAssertionError extends Error {
   /** Message of the underlying `@std/assert` `AssertionError`, if any. */
   readonly detail?: string;
 
+  /**
+   * Create an assertion error; the `message` is built from the arguments.
+   * @param assertionMessage - The assertion message (user-supplied or default)
+   * @param options - Expected/actual values, call-site info and the underlying
+   *   `@std/assert` error (`cause`); all optional
+   */
   constructor(
     assertionMessage: string,
     options: {

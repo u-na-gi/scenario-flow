@@ -14,6 +14,7 @@ import {
 } from "../assert.ts";
 import { createCtx } from "../context.ts";
 import { ScenarioFlow } from "../index.ts";
+import { permissionTestOptions } from "./permissions.ts";
 
 const config = { apiBaseUrl: "https://api.example.com" };
 
@@ -57,12 +58,15 @@ Deno.test("assert.equal - throws ScenarioAssertionError with expected/actual", (
   assertEquals(err.detail, (err.cause as Error).message);
 });
 
-Deno.test("assert.equal - default message and call-site location", () => {
+Deno.test({
+  name: "assert.equal - default message and call-site location",
+  ...permissionTestOptions({ read: true }),
+}, () => {
   const err = capture(() => assert.equal(1, 2));
   assertEquals(err.assertionMessage, "assert.equal failed");
   assertMatch(err.location ?? "", /assert\.test\.ts:\d+:\d+$/);
   assertStringIncludes(err.message, `(at ${err.location})`);
-  // source line is available because tests run with --allow-read
+  // source line is available because the test runs with read permission
   assertEquals(err.source, "const err = capture(() => assert.equal(1, 2));");
 });
 
@@ -182,7 +186,11 @@ Deno.test("createCtx - context exposes assert", () => {
   capture(() => ctx.assert.equal(1, 2));
 });
 
-Deno.test("ScenarioFlow - ctx.assert failure is logged with expected/actual and rejects", async () => {
+Deno.test({
+  name:
+    "ScenarioFlow - ctx.assert failure is logged with expected/actual and rejects",
+  ...permissionTestOptions({ read: true }),
+}, async () => {
   const flow = new ScenarioFlow("assert-scenario", config);
   flow.step("save tag filter", async (ctx) => {
     await Promise.resolve();

@@ -109,7 +109,7 @@ The CLI tool:
 - ✅ `--filter` by substring or regular expression
 - ✅ Parallel execution with `--concurrency`, without interleaved logs
 - ✅ `--base-url` / `SF_API_BASE_URL` override for the target server
-- ✅ Automatic network permission (`--allow-net`)
+- ✅ Scenario processes run with `--allow-net --allow-env`
 - ✅ Meaningful exit code for CI
 - ✅ Clear execution feedback, error handling and reporting
 - ✅ Help documentation

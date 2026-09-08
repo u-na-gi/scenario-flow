@@ -20,7 +20,7 @@ The workflow includes three main jobs:
 - **Matrix Strategy**: Runs against Deno `latest` only (the matrix has a single
   entry; add versions to `deno-version` in `test.yml` to widen it)
 - **Code Quality**: Runs formatting checks and linting
-- **Core Tests**: Executes 41 unit tests for scenario-flow/core with coverage
+- **Core Tests**: Runs the scenario-flow/core test suite with coverage
 - **CLI Tests**: Tests the command-line interface functionality
 - **Coverage**: Generates and uploads coverage reports to Codecov
 
@@ -36,12 +36,12 @@ The workflow includes three main jobs:
 
 ### 2. Project Configuration (`deno.json`)
 
-#### Tasks
+#### Workspace
 
-- `test:core` - Run core library tests with coverage
-- `test:cli` - Run CLI tests
-- `test:coverage` - Generate coverage reports
-- `ci` - Complete CI pipeline (format check + lint + tests)
+The root `deno.json` only declares the workspace members (`scenario-flow`,
+`scenario-flow-cli`, `example`); it defines no tasks. Tests are run with the
+commands listed under [Running Tests Locally](#running-tests-locally); the CLI
+member defines `deno task test`.
 
 #### Linting Configuration
 
@@ -64,14 +64,11 @@ The workflow includes three main jobs:
 - **index.ts**: 97.1% line coverage, 94.4% branch coverage
 - **store.ts**: 100% coverage
 
-### Test Suite Statistics
+### Test Suite
 
-- **41 total tests** across 5 test files
-- **8 context tests** - ScenarioFlowContext functionality
-- **13 index tests** - Main ScenarioFlow class
-- **11 type tests** - Type definitions and interfaces
-- **4 store tests** - Store module functionality
-- **5 integration tests** - End-to-end scenarios
+- Library tests live in `scenario-flow/core/__tests__/*.test.ts` (see the README
+  there for the file list and the permission-gating convention)
+- CLI tests live in `scenario-flow-cli/main_test.ts`
 
 ## Running Tests Locally
 
@@ -84,18 +81,21 @@ curl -fsSL https://deno.land/install.sh | sh
 
 ### Commands
 
+Run from the repository root:
+
 ```bash
-# Run complete CI pipeline locally
-deno task ci
-
-# Run individual test suites
-deno task test:core      # Core library tests
-deno task test:cli       # CLI tests
-deno task test:coverage  # Generate coverage report
-
 # Code quality checks
-deno task fmt:check      # Check formatting
-deno task lint          # Run linter
+deno fmt --check
+deno lint
+
+# Core library tests (add --coverage=coverage for a coverage report)
+cd scenario-flow && deno test --allow-net --allow-read --allow-env
+
+# CLI tests
+cd scenario-flow-cli && deno task test
+
+# Type-check the public API and the example scenarios
+deno check scenario-flow/mod.ts example/scenario/*.sf.ts
 ```
 
 ## CI Status Badges
@@ -211,7 +211,8 @@ the owner in the GitHub UI:
 
 ### For Contributors
 
-1. **Run CI locally** before pushing: `deno task ci`
+1. **Run the checks locally** before pushing (see
+   [Running Tests Locally](#running-tests-locally))
 2. **Maintain test coverage** above current thresholds
 3. **Follow formatting rules** enforced by CI
 4. **Add tests** for new functionality

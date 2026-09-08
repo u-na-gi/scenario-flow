@@ -49,12 +49,38 @@
  * @module
  */
 
-// Re-export everything from core modules
-export * from "./core/index.ts";
-export * from "./core/context.ts";
-export * from "./core/type.ts";
+// Explicit public surface (no `export *`: the core modules also contain
+// internal helpers that must not become part of the published API).
+export {
+  type ContextMarkerArg,
+  ScenarioFlow,
+  type ScenarioFlowChain,
+  type ScenarioFlowParent,
+} from "./core/index.ts";
+export type {
+  ContextKey,
+  ContextRecord,
+  ContextValue,
+  InheritedContext,
+  IsUntypedContext,
+  ScenarioFlowContext,
+  TypedContextKey,
+} from "./core/context.ts";
+export type {
+  ApiBaseUrlOption,
+  ResolvedScenarioFlowConfig,
+  ScenarioFlowConfig,
+  ScenarioFlowRequest,
+  ScenarioFlowStepFunction,
+} from "./core/type.ts";
+export type { ExpectedStatus } from "./core/status.ts";
 export { DEFAULT_API_BASE_URL_ENV_KEY, resolveConfig } from "./core/config.ts";
-export * from "./core/logger.ts";
+export {
+  logger,
+  type ScenarioInfo,
+  ScenarioLogger,
+  type StepInfo,
+} from "./core/logger.ts";
 export {
   describeResponseBody,
   type DescribeResponseBodyOptions,
