@@ -10,6 +10,7 @@ import { logger } from "./logger.ts";
 import { formatStatusMismatch, isExpectedStatus } from "./status.ts";
 import { describeResponseBody, type ResponseBodyLog } from "./response-body.ts";
 import { resolveConfig } from "./config.ts";
+import { isAssertionError, ScenarioAssertionError } from "./assert.ts";
 
 /**
  * Interface for chaining scenario steps together.
@@ -204,7 +205,20 @@ export class ScenarioFlow implements ScenarioFlowChain {
           await step.fn(this.ctx);
           logger.endStep();
         } catch (error) {
-          logger.logError(`Error in step "${step.name}": ${error}`);
+          if (error instanceof ScenarioAssertionError) {
+            logger.logAssertionFailure(
+              error.assertionMessage,
+              error.expected,
+              error.actual,
+              error.location,
+              error.source,
+            );
+          } else if (isAssertionError(error)) {
+            // Raw @std/assert AssertionError: expected/actual are not available
+            logger.logAssertionFailure((error as Error).message);
+          } else {
+            logger.logError(`Error in step "${step.name}": ${error}`);
+          }
           logger.endStep();
           throw error;
         }
@@ -223,7 +237,16 @@ export class ScenarioFlow implements ScenarioFlowChain {
     try {
       await this.run();
     } catch (error) {
-      logger.logError(`Error in scenario "${this.scenarioName}": ${error}`);
+      if (isAssertionError(error)) {
+        // Already printed in full inside the step block: keep this to one line
+        const e = error as Error & { assertionMessage?: string };
+        const summary = e.assertionMessage ?? e.message.split("\n")[0];
+        logger.logError(
+          `Error in scenario "${this.scenarioName}": ${e.name}: ${summary}`,
+        );
+      } else {
+        logger.logError(`Error in scenario "${this.scenarioName}": ${error}`);
+      }
       throw error;
     }
   }

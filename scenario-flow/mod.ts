@@ -54,3 +54,9 @@ export {
   type DescribeResponseBodyOptions,
   type ResponseBodyLog,
 } from "./core/response-body.ts";
+export {
+  assert,
+  isAssertionError,
+  type ScenarioAssert,
+  ScenarioAssertionError,
+} from "./core/assert.ts";
