@@ -133,6 +133,33 @@ await scenario
   .execute();
 ```
 
+### Logging
+
+Every `ctx.fetcher()` call logs the request and response, including a preview of
+the response body (truncated to 300 characters).
+
+Binary responses (`application/octet-stream`, `application/x-protobuf`,
+`image/*`, `audio/*`, `video/*`, `application/pdf`, `application/zip`, ...) are
+never printed raw. They are summarized instead:
+
+```
+📥 [Binary Data] (123 bytes, application/octet-stream)
+```
+
+When the `Content-Type` header is missing or unknown, the first bytes are
+sniffed: control characters or invalid UTF-8 mean binary.
+
+Set `SF_LOG_BINARY=hex` to also print a hex dump of the first 64 bytes:
+
+```bash
+SF_LOG_BINARY=hex deno run --allow-net --allow-env scenario.ts
+# 📥 [Binary Data] (123 bytes, application/x-protobuf)
+# 📥 hex: 0a 05 68 65 6c 6c 6f 10 01 ...
+```
+
+Reading the variable requires `--allow-env`; without it the hex dump is simply
+disabled (no error, no prompt).
+
 ## License
 
 MIT

@@ -1,3 +1,5 @@
+import type { ResponseBodyLog } from "./response-body.ts";
+
 // ANSI color codes for terminal output
 const colors = {
   reset: "\x1b[0m",
@@ -160,13 +162,15 @@ export class ScenarioLogger {
   }
 
   /**
-   * Log HTTP response information
+   * Log HTTP response information.
+   * @param body - Body text, or a structured {@link ResponseBodyLog}
+   *   (binary bodies are shown as `[Binary Data]` instead of raw bytes)
    */
   logResponse(
     status: number,
     statusText: string,
     duration: number,
-    body?: string,
+    body?: string | ResponseBodyLog,
   ): void {
     const statusColor = status >= 200 && status < 300
       ? colors.green
@@ -178,12 +182,35 @@ export class ScenarioLogger {
         colors.gray + ` (${this.formatDuration(duration)})` + colors.reset,
     );
 
-    if (body) {
+    if (body !== undefined) {
+      this.logResponseBody(body);
+    }
+  }
+
+  /**
+   * Log an HTTP response body. Text is truncated to 300 characters; binary
+   * bodies are summarized as `[Binary Data] (N bytes, type)` with an optional
+   * hex dump.
+   */
+  logResponseBody(body: string | ResponseBodyLog): void {
+    if (typeof body === "string" || body.kind === "text") {
+      const text = typeof body === "string" ? body : body.text;
+      if (!text) return;
       // Truncate long responses
-      const displayBody = body.length > 300
-        ? body.substring(0, 300) + "..."
-        : body;
+      const displayBody = text.length > 300
+        ? text.substring(0, 300) + "..."
+        : text;
       console.log(colors.gray + "  📥 " + displayBody + colors.reset);
+      return;
+    }
+
+    const type = body.contentType ? `, ${body.contentType}` : "";
+    console.log(
+      colors.gray + `  📥 [Binary Data] (${body.size} bytes${type})` +
+        colors.reset,
+    );
+    if (body.hex) {
+      console.log(colors.gray + "  📥 hex: " + body.hex + colors.reset);
     }
   }
 

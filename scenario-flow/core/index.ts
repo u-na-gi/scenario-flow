@@ -6,6 +6,7 @@ import type {
   ScenarioFlowStepFunction,
 } from "./type.ts";
 import { logger } from "./logger.ts";
+import { describeResponseBody, type ResponseBodyLog } from "./response-body.ts";
 
 /**
  * Interface for chaining scenario steps together.
@@ -108,12 +109,16 @@ export class ScenarioFlow implements ScenarioFlowChain {
       const response = await fetch(url, req);
       const requestDuration = performance.now() - requestStartTime;
 
-      // Log response
-      let responseBody: string | undefined;
+      // Log response (read the clone once as bytes; binary bodies are not
+      // decoded, see response-body.ts)
+      let responseBody: string | ResponseBodyLog;
       try {
         const clonedResponse = response.clone();
-        const text = await clonedResponse.text();
-        responseBody = text;
+        const bytes = new Uint8Array(await clonedResponse.arrayBuffer());
+        responseBody = describeResponseBody(
+          bytes,
+          response.headers.get("content-type"),
+        );
       } catch {
         responseBody = "[Unable to read response body]";
       }

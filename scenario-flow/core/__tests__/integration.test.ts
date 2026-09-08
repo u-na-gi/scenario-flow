@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { ScenarioFlow, type ScenarioFlowStepFunction } from "../index.ts";
 import type { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
 import { createCtx } from "../context.ts";
@@ -333,4 +333,179 @@ Deno.test("Integration - createCtx function with ScenarioFlow", async () => {
 
   assertEquals(data.test, "data");
   assertEquals(ctx.getConfig().apiBaseUrl, "https://api.example.com");
+});
+
+/**
+ * Run `fn` while capturing console.log output. Returns captured lines.
+ */
+async function captureConsoleLog(
+  fn: () => Promise<void>,
+): Promise<string[]> {
+  const originalLog = console.log;
+  const lines: string[] = [];
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+  };
+  try {
+    await fn();
+  } finally {
+    console.log = originalLog;
+  }
+  return lines;
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    Deno.env.delete(name);
+  } else {
+    Deno.env.set(name, value);
+  }
+}
+
+Deno.test("Integration - binary (octet-stream) response is logged as [Binary Data]", async () => {
+  // Protobuf-like payload with control bytes and invalid UTF-8
+  const payload = new Uint8Array([
+    0x0a,
+    0x05,
+    0x68,
+    0x65,
+    0x6c,
+    0x6c,
+    0x6f,
+    0x10,
+    0x01,
+    0x1a,
+    0x03,
+    0xff,
+    0xfe,
+    0xfd,
+    0x00,
+    0x07,
+  ]);
+  const garbled = new TextDecoder().decode(payload);
+
+  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+    const url = new URL(req.url);
+    if (url.pathname === "/proto") {
+      return new Response(payload, {
+        status: 200,
+        headers: { "Content-Type": "application/x-protobuf" },
+      });
+    }
+    if (url.pathname === "/blob") {
+      return new Response(payload, {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+    }
+    if (url.pathname === "/untyped") {
+      // No Content-Type at all: must be detected by sniffing
+      return new Response(payload, { status: 200 });
+    }
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  const originalEnv = Deno.env.get("SF_LOG_BINARY");
+  try {
+    Deno.env.delete("SF_LOG_BINARY");
+    const config: ScenarioFlowConfig = {
+      apiBaseUrl: `http://127.0.0.1:${server.addr.port}`,
+    };
+
+    let received: Uint8Array | undefined;
+    const scenarioFlow = new ScenarioFlow("binary-log", config)
+      .step("protobuf", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/proto" });
+        // The original response must still be readable by the step
+        received = new Uint8Array(await response.arrayBuffer());
+      })
+      .step("octet-stream", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/blob" });
+        await response.arrayBuffer();
+      })
+      .step("untyped", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/untyped" });
+        await response.arrayBuffer();
+      })
+      .step("json", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/json" });
+        await response.json();
+      });
+
+    const lines = await captureConsoleLog(() => scenarioFlow.execute());
+    const output = lines.join("\n");
+
+    assertEquals(received, payload);
+
+    assertStringIncludes(
+      output,
+      `📥 [Binary Data] (${payload.length} bytes, application/x-protobuf)`,
+    );
+    assertStringIncludes(
+      output,
+      `📥 [Binary Data] (${payload.length} bytes, application/octet-stream)`,
+    );
+    assertStringIncludes(output, `📥 [Binary Data] (${payload.length} bytes)`);
+    assertEquals(lines.filter((l) => l.includes("[Binary Data]")).length, 3);
+
+    // Raw bytes must never be printed, and no hex dump without SF_LOG_BINARY
+    assertEquals(output.includes(garbled), false);
+    assertEquals(output.includes("📥 hex:"), false);
+
+    // JSON is still logged as text
+    assertStringIncludes(output, '📥 {"ok":true}');
+  } finally {
+    restoreEnv("SF_LOG_BINARY", originalEnv);
+    await server.shutdown();
+  }
+});
+
+Deno.test("Integration - SF_LOG_BINARY=hex adds a hex dump of the first 64 bytes", async () => {
+  const payload = new Uint8Array(100).map((_, i) => (i * 7 + 3) & 0xff);
+  payload[0] = 0x0a;
+  payload[1] = 0x1b;
+
+  const server = Deno.serve(
+    { port: 0, onListen() {} },
+    () =>
+      new Response(payload, {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      }),
+  );
+
+  const originalEnv = Deno.env.get("SF_LOG_BINARY");
+  try {
+    Deno.env.set("SF_LOG_BINARY", "hex");
+    const config: ScenarioFlowConfig = {
+      apiBaseUrl: `http://127.0.0.1:${server.addr.port}`,
+    };
+
+    const scenarioFlow = new ScenarioFlow("binary-hex", config)
+      .step("download", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/file.bin" });
+        await response.arrayBuffer();
+      });
+
+    const lines = await captureConsoleLog(() => scenarioFlow.execute());
+    const hexLine = lines.find((l) => l.includes("📥 hex:"));
+    assertEquals(hexLine !== undefined, true);
+
+    const expectedHex = Array.from(
+      payload.subarray(0, 64),
+      (b) => b.toString(16).padStart(2, "0"),
+    ).join(" ");
+    assertStringIncludes(hexLine as string, `📥 hex: ${expectedHex} ...`);
+    assertStringIncludes(hexLine as string, "📥 hex: 0a 1b ");
+    assertStringIncludes(
+      lines.join("\n"),
+      "📥 [Binary Data] (100 bytes, application/octet-stream)",
+    );
+  } finally {
+    restoreEnv("SF_LOG_BINARY", originalEnv);
+    await server.shutdown();
+  }
 });
