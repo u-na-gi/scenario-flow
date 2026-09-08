@@ -15,12 +15,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Every job below is gated so that only the repository owner can trigger CI.
+# Every job below is gated so that only the repository owner can trigger CI
+# (`triggering_actor` also covers "Re-run jobs" clicked by anyone else).
 # Pull requests must also come from a branch of this repository (never a fork),
 # so fork code never runs with this repository's context.
 #
 #   if: >-
 #     github.actor == github.repository_owner &&
+#     github.triggering_actor == github.repository_owner &&
 #     (github.event_name != 'pull_request' ||
 #     github.event.pull_request.head.repo.full_name == github.repository)
 
@@ -30,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner &&
       (github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository)
 
@@ -72,11 +75,14 @@ jobs:
           cd scenario-flow
           deno coverage coverage --lcov --output=coverage.lcov
 
-      # Token-less upload: no secret is passed to this step. Failures are
-      # non-fatal so the pipeline does not depend on a third-party service.
+      # CODECOV_TOKEN is scoped to this step only. codecov-action v4+ requires
+      # a token for non-fork uploads; if the secret is missing the upload is
+      # skipped. Failures are non-fatal so the pipeline does not depend on a
+      # third-party service.
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./scenario-flow/coverage.lcov
           flags: scenario-flow-core
           name: scenario-flow-core-coverage
@@ -102,6 +108,7 @@ jobs:
     needs: test
     if: >-
       github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner &&
       (github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository)
 
@@ -156,6 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner &&
       (github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository)
 

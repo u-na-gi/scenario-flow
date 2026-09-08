@@ -19,12 +19,12 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Only the repository owner may publish, whether via a `v*` tag push or a
-    # manual `workflow_dispatch`. For anyone else this job is a no-op.
+    # Only the repository owner may publish, whether via a `v*` tag push, a
+    # manual `workflow_dispatch`, or a re-run. For anyone else this job is a
+    # no-op.
     if: >-
       github.actor == github.repository_owner &&
-      (github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository)
+      github.triggering_actor == github.repository_owner
 
     permissions:
       contents: read
