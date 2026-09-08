@@ -76,7 +76,9 @@ new ScenarioFlow(name: string, config: ScenarioFlowConfig)
 ```
 
 - `name`: A descriptive name for the scenario
-- `config`: Configuration object containing `apiBaseUrl`
+- `config`: Configuration object containing `apiBaseUrl` (a string, a
+  `() => string`, or `{ default, envKey? }` — see
+  [Overriding the base URL](#overriding-the-base-url))
 
 #### Methods
 
@@ -98,7 +100,8 @@ The context object passed to each step provides:
 - `fetcher(request)`: Make HTTP requests
 - `addContext(key, value)`: Store data for later steps
 - `getContext<T>(key)`: Retrieve stored data
-- `getConfig()`: Get the scenario configuration
+- `getConfig()`: Get the scenario configuration (`apiBaseUrl` is always a
+  resolved `string` here)
 
 ## Advanced Usage
 
@@ -116,6 +119,52 @@ const mainScenario = new ScenarioFlow("Main Flow", config)
     // Additional logic
   });
 ```
+
+### Overriding the base URL
+
+The `apiBaseUrl` written in a scenario is a default. It can be overridden at run
+time so the same scenarios can target a local server, staging, or production
+without editing them:
+
+```bash
+# via environment variable
+SF_API_BASE_URL=https://staging.example.com sfcli ./scenario-test
+
+# via the CLI flag (sets SF_API_BASE_URL for the scenario processes)
+sfcli --base-url https://staging.example.com ./scenario-test
+```
+
+`apiBaseUrl` accepts three forms:
+
+```typescript
+// 1. string — used as-is unless SF_API_BASE_URL is set
+new ScenarioFlow("A", { apiBaseUrl: "http://localhost:3000" });
+
+// 2. function — called once when the scenario is constructed
+new ScenarioFlow("B", { apiBaseUrl: () => computeBaseUrl() });
+
+// 3. object — `default` unless the env var named by `envKey` is set
+new ScenarioFlow("C", {
+  apiBaseUrl: { default: "http://localhost:3000", envKey: "MY_API_URL" },
+});
+```
+
+Resolution rules:
+
+- Resolution happens once, in the `ScenarioFlow` constructor. `ctx.getConfig()`
+  always returns the resolved `string`.
+- Precedence: the environment variable (`envKey`, default `SF_API_BASE_URL`)
+  when it is set and non-empty, then the configured value (string / function
+  result / `default`). The function is not called when the env override applies.
+- An empty environment variable is treated as unset.
+- Reading the environment requires `--allow-env` (at least
+  `--allow-env=SF_API_BASE_URL`). Without it the override is silently ignored
+  and the configured value is used; no permission prompt is triggered and no
+  error is thrown.
+- When an override is applied, `apiBaseUrl overridden by SF_API_BASE_URL: ...`
+  is logged once per process (not once per scenario).
+- Scenarios built from another scenario (`new ScenarioFlow(name, parent)`)
+  inherit the parent's already resolved config.
 
 ### Error Handling
 

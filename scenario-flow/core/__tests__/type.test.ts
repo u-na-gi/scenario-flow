@@ -20,7 +20,7 @@ Deno.test("ScenarioFlowConfig - various URL formats", () => {
 
   configs.forEach((config) => {
     assertEquals(typeof config.apiBaseUrl, "string");
-    assertEquals(config.apiBaseUrl.length > 0, true);
+    assertEquals(String(config.apiBaseUrl).length > 0, true);
   });
 });
 

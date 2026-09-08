@@ -1,8 +1,38 @@
 /**
- * Configuration for a scenario flow.
+ * Accepted forms of `apiBaseUrl`.
+ *
+ * - `string`: used as-is.
+ * - `() => string`: called once when the scenario is constructed.
+ * - `{ default, envKey? }`: `default` is used unless the environment variable
+ *   named by `envKey` (default `SF_API_BASE_URL`) is set and non-empty.
+ *
+ * In every form a non-empty `SF_API_BASE_URL` (or the custom `envKey`) takes
+ * precedence over the configured value.
+ */
+export type ApiBaseUrlOption =
+  | string
+  | (() => string)
+  | {
+    /** Base URL used when the environment variable is not set */
+    default: string;
+    /** Environment variable that overrides `default` (default: `SF_API_BASE_URL`) */
+    envKey?: string;
+  };
+
+/**
+ * Configuration for a scenario flow, as passed to the `ScenarioFlow` constructor.
  */
 export interface ScenarioFlowConfig {
-  /** Base URL for all API requests */
+  /** Base URL for all API requests (see {@link ApiBaseUrlOption}) */
+  apiBaseUrl: ApiBaseUrlOption;
+}
+
+/**
+ * Configuration after `apiBaseUrl` has been resolved to a concrete string.
+ * This is what `ctx.getConfig()` returns.
+ */
+export interface ResolvedScenarioFlowConfig extends ScenarioFlowConfig {
+  /** Resolved base URL for all API requests */
   apiBaseUrl: string;
 }
 

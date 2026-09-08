@@ -1,4 +1,9 @@
-import type { ScenarioFlowConfig, ScenarioFlowRequest } from "./type.ts";
+import type {
+  ResolvedScenarioFlowConfig,
+  ScenarioFlowConfig,
+  ScenarioFlowRequest,
+} from "./type.ts";
+import { resolveConfig } from "./config.ts";
 
 /**
  * Context object passed to each scenario step.
@@ -28,15 +33,15 @@ export interface ScenarioFlowContext {
   merge(ctx: ScenarioFlowContext): void;
   /**
    * Get the scenario configuration.
-   * @returns The configuration object
+   * @returns The configuration object with `apiBaseUrl` resolved to a string
    */
-  getConfig(): ScenarioFlowConfig;
+  getConfig(): ResolvedScenarioFlowConfig;
 }
 
 class ScenarioFlowContextImple implements ScenarioFlowContext {
   fetcher: (req: ScenarioFlowRequest) => Promise<Response>;
   customContext: Record<string, unknown>;
-  private config: ScenarioFlowConfig;
+  private config: ResolvedScenarioFlowConfig;
 
   constructor(
     fetcher: (req: ScenarioFlowRequest) => Promise<Response>,
@@ -44,10 +49,10 @@ class ScenarioFlowContextImple implements ScenarioFlowContext {
   ) {
     this.fetcher = fetcher;
     this.customContext = {};
-    this.config = config;
+    this.config = resolveConfig(config);
   }
 
-  getConfig(): ScenarioFlowConfig {
+  getConfig(): ResolvedScenarioFlowConfig {
     return this.config;
   }
 
@@ -67,7 +72,8 @@ class ScenarioFlowContextImple implements ScenarioFlowContext {
 /**
  * Create a new scenario context.
  * @param fetcher - HTTP client function
- * @param config - Scenario configuration
+ * @param config - Scenario configuration (`apiBaseUrl` is resolved; already
+ *   resolved configs are accepted unchanged)
  * @returns New context instance
  */
 export const createCtx = function (

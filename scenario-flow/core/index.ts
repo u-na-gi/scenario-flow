@@ -1,11 +1,13 @@
 import { createCtx, type ScenarioFlowContext } from "./context.ts";
 import type {
   NamedStep,
+  ResolvedScenarioFlowConfig,
   ScenarioFlowConfig,
   ScenarioFlowRequest,
   ScenarioFlowStepFunction,
 } from "./type.ts";
 import { logger } from "./logger.ts";
+import { resolveConfig } from "./config.ts";
 
 /**
  * Interface for chaining scenario steps together.
@@ -55,14 +57,16 @@ export type { ScenarioFlowStepFunction } from "./type.ts";
  */
 export class ScenarioFlow implements ScenarioFlowChain {
   private scenarioName: string;
-  private config: ScenarioFlowConfig;
+  private config: ResolvedScenarioFlowConfig;
   private ctx: ScenarioFlowContext;
   private steps: NamedStep[] = [];
 
   /**
    * Create a new scenario with configuration.
    * @param name - Descriptive name for the scenario
-   * @param config - Configuration object with apiBaseUrl
+   * @param config - Configuration object with apiBaseUrl. `apiBaseUrl` is
+   *   resolved once here; a non-empty `SF_API_BASE_URL` environment variable
+   *   (or the custom `envKey`) takes precedence over the configured value.
    */
   constructor(name: string, config: ScenarioFlowConfig);
   /**
@@ -75,7 +79,7 @@ export class ScenarioFlow implements ScenarioFlowChain {
     this.scenarioName = name;
 
     if (typeof arg === "object" && "apiBaseUrl" in arg) {
-      this.config = arg;
+      this.config = resolveConfig(arg);
       const fetcher = this.createFetcher();
       this.ctx = createCtx(fetcher, this.config);
       return;
