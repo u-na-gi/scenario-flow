@@ -103,6 +103,33 @@ sfcli -c 4 ./scenarios
 sfcli --base-url http://localhost:8080/ ./scenarios
 ```
 
+#### Overriding the base URL
+
+The `apiBaseUrl` written in a scenario can be overridden at run time, so the
+same scenario files can target a local server, staging, or production:
+
+```bash
+# via environment variable
+SF_API_BASE_URL=https://staging.example.com sfcli ./scenario-test
+
+# via the CLI flag (sets SF_API_BASE_URL for the scenario processes)
+sfcli --base-url https://staging.example.com ./scenario-test
+```
+
+A non-empty `SF_API_BASE_URL` takes precedence over the value in the scenario.
+To use a custom variable name, pass the object form:
+
+```typescript
+new ScenarioFlow("Login", {
+  apiBaseUrl: { default: "http://localhost:3000", envKey: "MY_API_URL" },
+});
+```
+
+`apiBaseUrl` also accepts a `() => string`, called once when the scenario is
+constructed. See
+[scenario-flow/README.md](./scenario-flow/README.md#overriding-the-base-url) for
+the full resolution rules.
+
 #### CLI Features
 
 - 🔍 **Recursive search** for `.sf.ts` files, plus single files, multiple paths
