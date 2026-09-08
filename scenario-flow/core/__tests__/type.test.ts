@@ -1,5 +1,7 @@
 import { assertEquals } from "@std/assert";
 import type { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
+import { createCtx, type ScenarioFlowContext } from "../context.ts";
+import { ScenarioFlow, type ScenarioFlowChain } from "../index.ts";
 
 Deno.test("ScenarioFlowConfig - interface structure", () => {
   const config: ScenarioFlowConfig = {
@@ -150,4 +152,147 @@ Deno.test("ScenarioFlowRequest - minimal required properties", () => {
   assertEquals(typeof request.path, "string");
   assertEquals(request.path, "/minimal");
   // method is optional since it extends RequestInit where method has a default
+});
+
+// ---------------------------------------------------------------------------
+// Typed context (issue #20)
+// These tests are mostly compile-time: `deno test` type-checks this file, so a
+// wrong `Equal<>` assertion or an unused `@ts-expect-error` fails the suite.
+// ---------------------------------------------------------------------------
+
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends
+  (<T>() => T extends B ? 1 : 2) ? true : false;
+const assertType = <_T extends true>(): void => {};
+
+const config: ScenarioFlowConfig = { apiBaseUrl: "https://api.example.com" };
+const noop = async (): Promise<void> => {};
+
+interface LoginCtx {
+  token: string;
+  userId: number;
+}
+type DataCtx = { items: string[] };
+
+Deno.test("Typed context - untyped ScenarioFlow keeps today's behaviour", () => {
+  const flow = new ScenarioFlow("untyped", config);
+  assertType<Equal<typeof flow, ScenarioFlow<Record<string, unknown>>>>();
+
+  flow.step("any key / any value", async (ctx) => {
+    await noop();
+    ctx.setContext("anything", 42);
+    ctx.setContext("other", { nested: true });
+
+    const raw = ctx.getContext("anything");
+    assertType<Equal<typeof raw, unknown>>();
+
+    const typed = ctx.getContext<string>("anything");
+    assertType<Equal<typeof typed, string | undefined>>();
+  });
+});
+
+Deno.test("Typed context - keys and values are checked when Ctx is declared", () => {
+  const login = new ScenarioFlow<LoginCtx>("login", config)
+    .step("login", async (ctx) => {
+      await noop();
+      ctx.setContext("token", "jwt");
+      ctx.setContext("userId", 1);
+
+      // @ts-expect-error value type mismatch: token must be a string
+      ctx.setContext("token", 123);
+      // @ts-expect-error unknown key
+      ctx.setContext("nope", "x");
+      // @ts-expect-error unknown key
+      ctx.getContext("nope");
+
+      const token = ctx.getContext("token");
+      assertType<Equal<typeof token, string | undefined>>();
+      const userId = ctx.getContext("userId");
+      assertType<Equal<typeof userId, number | undefined>>();
+
+      // Explicit type argument still works on a known key
+      const explicit = ctx.getContext<string>("token");
+      assertType<Equal<typeof explicit, string | undefined>>();
+    });
+
+  assertType<Equal<typeof login, ScenarioFlowChain<LoginCtx>>>();
+});
+
+Deno.test("Typed context - constructor inherits the parent's Ctx", () => {
+  const login = new ScenarioFlow<LoginCtx>("login", config);
+  const child = new ScenarioFlow("child", login);
+  assertType<Equal<typeof child, ScenarioFlow<LoginCtx>>>();
+
+  child.step("read parent value", async (ctx) => {
+    await noop();
+    const token = ctx.getContext("token");
+    assertType<Equal<typeof token, string | undefined>>();
+  });
+
+  // Own keys can be added by spelling the intersection explicitly ...
+  const explicit = new ScenarioFlow<LoginCtx & DataCtx>("explicit", login);
+  explicit.step("both", async (ctx) => {
+    await noop();
+    ctx.setContext("items", ["a"]);
+    const token = ctx.getContext("token");
+    assertType<Equal<typeof token, string | undefined>>();
+  });
+});
+
+Deno.test("Typed context - extend() yields Parent & Own", () => {
+  const login = new ScenarioFlow<LoginCtx>("login", config);
+  const getData = login.extend<DataCtx>("get data");
+  assertType<Equal<typeof getData, ScenarioFlow<LoginCtx & DataCtx>>>();
+
+  getData.step("use both", async (ctx) => {
+    await noop();
+    const token = ctx.getContext("token");
+    assertType<Equal<typeof token, string | undefined>>();
+    ctx.setContext("items", ["x"]);
+    // @ts-expect-error items must be string[]
+    ctx.setContext("items", "x");
+  });
+
+  // extend() without a type argument just inherits the parent's Ctx
+  const plain = login.extend("plain");
+  assertType<Equal<typeof plain, ScenarioFlow<LoginCtx>>>();
+});
+
+Deno.test("Typed context - step(parent) widens the chain's Ctx", () => {
+  const login = new ScenarioFlow<LoginCtx>("login", config);
+  const chain = new ScenarioFlow<DataCtx>("main", config)
+    .step(login)
+    .step("after", async (ctx) => {
+      await noop();
+      const token = ctx.getContext("token");
+      assertType<Equal<typeof token, string | undefined>>();
+      ctx.setContext("items", []);
+    });
+  assertType<Equal<typeof chain, ScenarioFlowChain<DataCtx & LoginCtx>>>();
+});
+
+Deno.test("Typed context - untyped parent or child does not erase the typed side", () => {
+  const untyped = new ScenarioFlow("untyped", config);
+  const typedChild = untyped.extend<DataCtx>("typed child");
+  assertType<Equal<typeof typedChild, ScenarioFlow<DataCtx>>>();
+
+  const typedParent = new ScenarioFlow<LoginCtx>("typed", config);
+  const untypedChild = typedParent.extend("untyped child");
+  assertType<Equal<typeof untypedChild, ScenarioFlow<LoginCtx>>>();
+
+  const widened = new ScenarioFlow<LoginCtx>("main", config).step(untyped);
+  assertType<Equal<typeof widened, ScenarioFlowChain<LoginCtx>>>();
+});
+
+Deno.test("Typed context - ScenarioFlowContext<Ctx> runtime behaviour", () => {
+  const ctx: ScenarioFlowContext<LoginCtx> = createCtx<LoginCtx>(
+    async () => {
+      await noop();
+      return new Response("ok");
+    },
+    config,
+  );
+  ctx.setContext("token", "jwt");
+  assertEquals(ctx.getContext("token"), "jwt");
+  assertEquals(ctx.getContext("userId"), undefined);
+  assertEquals(ctx.customContext, { token: "jwt" });
 });

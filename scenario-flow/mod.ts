@@ -18,7 +18,10 @@
  * import { ScenarioFlow } from "@u-na-gi/scenario-flow";
  *
  * const config = { apiBaseUrl: "https://api.example.com" };
- * const scenario = new ScenarioFlow("User Login Flow", config);
+ *
+ * // Declare the context shape to get typed setContext / getContext
+ * type LoginCtx = { authToken: string };
+ * const scenario = new ScenarioFlow<LoginCtx>("User Login Flow", config);
  *
  * await scenario
  *   .step("Login user", async (ctx) => {
@@ -28,10 +31,10 @@
  *       body: JSON.stringify({ email: "user@example.com", password: "password123" })
  *     });
  *     const data = await response.json();
- *     ctx.setContext("authToken", data.token);
+ *     ctx.setContext("authToken", data.token); // must be a string
  *   })
  *   .step("Get user profile", async (ctx) => {
- *     const token = ctx.getContext<string>("authToken");
+ *     const token = ctx.getContext("authToken"); // string | undefined
  *     const response = await ctx.fetcher({
  *       path: "/user/profile",
  *       headers: { "Authorization": `Bearer ${token}` }
@@ -39,6 +42,9 @@
  *   })
  *   .execute();
  * ```
+ *
+ * Without a type argument the context is untyped (`Record<string, unknown>`):
+ * `ctx.getContext<T>(key)` returns `T | undefined`.
  *
  * @module
  */

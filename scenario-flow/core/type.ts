@@ -15,26 +15,27 @@ export interface ScenarioFlowRequest extends RequestInit {
   path: string;
 }
 
+// Import the context type to use in the step function
+import type { ContextRecord, ScenarioFlowContext } from "./context.ts";
+
 /**
  * Internal interface for a named scenario step.
  */
-export interface NamedStep {
+export interface NamedStep<Ctx extends object = ContextRecord> {
   /** Step name for logging */
   name: string;
   /** Function to execute for this step */
-  fn: ScenarioFlowStepFunction;
+  fn: ScenarioFlowStepFunction<Ctx>;
 }
-
-// Import the context type to use in the step function
-import type { ScenarioFlowContext } from "./context.ts";
 
 /**
  * Function type for scenario steps.
  * Receives the scenario context and should return a Promise.
  *
+ * @typeParam Ctx - Shape of the scenario context (see {@link ScenarioFlowContext})
  * @param ctx - The scenario context with HTTP client and shared state
  * @returns Promise that resolves when the step completes
  */
-export type ScenarioFlowStepFunction = (
-  ctx: ScenarioFlowContext,
+export type ScenarioFlowStepFunction<Ctx extends object = ContextRecord> = (
+  ctx: ScenarioFlowContext<Ctx>,
 ) => Promise<void>;
