@@ -43,7 +43,7 @@ jobs:
       - name: Run scenario-flow core tests
         run: |
           cd scenario-flow
-          deno test --allow-net --allow-read --allow-env --coverage=coverage
+          deno test --allow-net --allow-read --allow-env --allow-write --coverage=coverage
 
       - name: Generate coverage report
         run: |
@@ -61,7 +61,7 @@ jobs:
       - name: Run scenario-flow-cli tests
         run: |
           cd scenario-flow-cli
-          deno test --allow-read --allow-run --allow-net
+          deno test --allow-read --allow-run --allow-net --allow-write
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

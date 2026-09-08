@@ -32,7 +32,7 @@ Run from the repository root unless noted.
 ```bash
 deno fmt                      # format (CI runs `deno fmt --check`)
 deno lint                     # lint (must be clean; `no-import-prefix` is enforced)
-cd scenario-flow && deno test --allow-net --allow-read --allow-env
+cd scenario-flow && deno test --allow-net --allow-read --allow-env --allow-write
 cd scenario-flow-cli && deno task test
 deno check scenario-flow/mod.ts example/scenario/*.sf.ts
 ```
@@ -54,7 +54,7 @@ Example scenarios need the sample server: `cd example && deno task server:start`
   missing. Guard `Deno.env.get` with `Deno.permissions.querySync` and fall back
   silently.
 - **Environment variables** understood by the library/CLI are prefixed `SF_`
-  (`SF_API_BASE_URL`, `SF_LOG_BINARY`).
+  (`SF_API_BASE_URL`, `SF_LOG_BINARY`, `SF_CONTEXT_FILE`, `SF_CONTEXT_OUT`).
 - **Backward compatibility**: keep default behaviour unchanged; add opt-in
   options rather than changing defaults. Deprecate with `@deprecated` and keep a
   delegating alias for at least one minor version.

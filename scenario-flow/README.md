@@ -175,6 +175,12 @@ Append another scenario's steps to this one.
 Create a new scenario that inherits this scenario's steps and context and adds
 its own context keys.
 
+##### `.once(): this`
+
+Mark the scenario as run-once: scenarios that inherit it run its steps at most
+once per process and reuse the resulting context afterwards. See
+[Running setup once](#running-setup-once).
+
 ##### `.execute(): Promise<void>`
 
 Execute all steps in the scenario.
@@ -245,6 +251,106 @@ const mainScenario = new ScenarioFlow("Main Flow", config)
     // Additional logic
   });
 ```
+
+### Running setup once
+
+Inheriting a parent (`new ScenarioFlow(name, parent)`, `parent.extend(name)`,
+`.step(parent)`) copies the parent's steps, so a chain such as
+`registerUser → login → ...` runs again inside **every** scenario built on it: a
+test suite with 23 files registers 23 users. That default is kept (it is the
+right thing for scenarios that must be independent). Two opt-in mechanisms let
+you run such a chain only once.
+
+#### `parent.once()` — memoize within one process
+
+```typescript
+export const login = new ScenarioFlow<LoginCtx>("Login", config)
+  .step("Register", async (ctx) => {
+    /* POST /users */
+  })
+  .step("Authenticate", async (ctx) => {
+    /* POST /auth/login, ctx.setContext("token", ...) */
+  })
+  .once();
+
+const listTags = login.extend("List tags").step("list", async (ctx) => {
+  /* uses ctx.getContext("token") */
+});
+const createTag = login.extend("Create tag").step("create", async (ctx) => {
+  /* uses ctx.getContext("token") */
+});
+
+await listTags.execute(); // runs Register and Authenticate
+await createTag.execute(); // reuses the token; Register/Authenticate skipped
+```
+
+Instead of copying the parent's steps, a child of a run-once parent gets one
+synthetic step named `once: <parent name>`:
+
+- The first time that step runs in the process, the parent's steps run in order
+  against the child's context (each reported as an info line, e.g.
+  `"Login" > Authenticate`, inside the `once: Login` step block). A shallow
+  snapshot of the values those steps wrote is cached on the parent instance.
+- Every later run — by another child, or by `execute()` on the parent itself —
+  merges that snapshot into the context and logs
+  `"Login" already ran (cached, skipped)`.
+- Children that reach the step while the first run is still in flight (e.g.
+  `Promise.all` over several scenarios) wait for it and share its result; the
+  parent never runs twice in one process.
+- A failing run is not cached: the error propagates, and the next child runs the
+  parent's steps again.
+- Nesting composes: with `register.once()` inherited by `login`, `login`'s step
+  list contains `once: Register`, so the grandparent still runs at most once,
+  whether or not `login` itself is marked `.once()`.
+- Calling `parent.execute()` directly before the children also populates the
+  cache, and a second direct `execute()` is skipped as well.
+
+The cache lives in the process, keyed by the parent instance: separate
+`deno run` processes (one per file under `sfcli`) do not share it. For that, use
+`sfcli --setup`.
+
+#### `sfcli --setup <file>` — run-level fixture across processes
+
+```bash
+sfcli --setup ./scenario-test/setup.sf.ts ./scenario-test
+```
+
+`sfcli` runs the setup file first and alone, then the remaining files (the setup
+file is excluded from the regular list when it is also under the given paths).
+If the setup file fails, nothing else runs and `sfcli` exits with `1`. The
+handover goes through two environment variables that the library understands:
+
+| Variable                 | Effect                                                                                                                                                                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SF_CONTEXT_OUT=<path>`  | After every successful `execute()`, the scenario's context is written to `<path>` as JSON. Scenarios executed later in the same process add to (and override) the same file, so a setup file may execute a chain of several scenarios. |
+| `SF_CONTEXT_FILE=<path>` | Every top-level `ScenarioFlow` (one created with a config, not from a parent) loads the JSON object in `<path>` into its initial context at construction. Values written by steps override the fixture values.                         |
+
+`sfcli --setup` sets `SF_CONTEXT_OUT` to a temporary file for the setup process
+and `SF_CONTEXT_FILE` for all other processes, then deletes the file at the end.
+Child processes get file permissions for that one file only
+(`--allow-write=<file>` / `--allow-read=<file>`).
+
+**Only JSON-serializable values survive** the file: strings, numbers, booleans,
+`null`, arrays, plain objects and objects with `toJSON` (such as `Date`).
+Functions, `Response` objects, `Map`/`Set`, bigints and symbols are dropped
+(inside arrays they become `null`). Tokens, ids and small records are fine.
+
+Without `sfcli`, the same variables work with plain `deno run`:
+
+```bash
+SF_CONTEXT_OUT=./ctx.json deno run --allow-net --allow-env --allow-write=./ctx.json setup.sf.ts
+SF_CONTEXT_FILE=./ctx.json deno run --allow-net --allow-env --allow-read=./ctx.json list-tags.sf.ts
+```
+
+Reading the variables requires `--allow-env`; without it they are silently
+ignored. When the file permission is missing or the file cannot be used (not
+found, invalid JSON, not an object), the library logs a warning once and
+continues as if the variable were unset. Nothing throws and no permission prompt
+is triggered.
+
+The two mechanisms combine: mark `login` with `.once()` for the files that
+execute several scenarios built on it, and use `--setup` to run it once per
+`sfcli` run.
 
 ### Overriding the base URL
 

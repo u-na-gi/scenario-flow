@@ -54,6 +54,12 @@ export * from "./core/index.ts";
 export * from "./core/context.ts";
 export * from "./core/type.ts";
 export { DEFAULT_API_BASE_URL_ENV_KEY, resolveConfig } from "./core/config.ts";
+export {
+  CONTEXT_FILE_ENV_KEY,
+  CONTEXT_OUT_ENV_KEY,
+  isSerializableContextValue,
+  toSerializableContext,
+} from "./core/fixture.ts";
 export * from "./core/logger.ts";
 export {
   describeResponseBody,

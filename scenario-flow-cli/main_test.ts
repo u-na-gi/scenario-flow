@@ -1,4 +1,9 @@
-import { assert, assertEquals, assertNotEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertThrows,
+} from "@std/assert";
 import { join, resolve } from "@std/path";
 import {
   buildFilter,
@@ -14,6 +19,8 @@ const BASIC = join(FIXTURES, "basic");
 const EMPTY = join(FIXTURES, "empty");
 const CONCURRENT = join(FIXTURES, "concurrent");
 const ENV = join(FIXTURES, "env");
+const SETUP = join(FIXTURES, "setup");
+const SETUP_FAIL = join(FIXTURES, "setup-fail");
 
 interface CliRun {
   code: number;
@@ -29,7 +36,14 @@ async function runCli(
   env: Record<string, string> = {},
 ): Promise<CliRun> {
   const process = new Deno.Command("deno", {
-    args: ["run", "--allow-read", "--allow-run", "main.ts", ...args],
+    args: [
+      "run",
+      "--allow-read",
+      "--allow-run",
+      "--allow-write",
+      "main.ts",
+      ...args,
+    ],
     cwd: Deno.cwd(),
     env,
     stdout: "piped",
@@ -55,6 +69,7 @@ Deno.test("CLI help functionality", async () => {
   assertEquals(stdout.includes("--concurrency"), true);
   assertEquals(stdout.includes("--filter"), true);
   assertEquals(stdout.includes("--base-url"), true);
+  assertEquals(stdout.includes("--setup"), true);
   assertEquals(stdout.includes("--allow-empty"), true);
 });
 
@@ -252,6 +267,114 @@ Deno.test("CLI --base-url passes SF_API_BASE_URL to child processes", async () =
   assertEquals(both.stdout.includes("BASE_URL=http://flag.example/"), true);
 });
 
+/** Extracts the temporary context file path printed by `--setup`. */
+function contextFileOf(stdout: string): string {
+  const match = stdout.match(/context file: (\S+)/);
+  assert(match !== null, "context file path not printed");
+  return match[1];
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await Deno.stat(path);
+    return true;
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return false;
+    throw error;
+  }
+}
+
+Deno.test("CLI --setup runs the setup file first and passes its context to the other files", async () => {
+  const { code, stdout } = await runCli([
+    "--setup",
+    join(SETUP, "setup.sf.ts"),
+    join(SETUP, "use-context.sf.ts"),
+  ]);
+  assertEquals(code, 0, stdout);
+  assertEquals(stdout.includes("Setup:"), true);
+  assertEquals(stdout.includes("setup-scenario-ran"), true);
+  assertEquals(
+    stdout.includes("USE_CONTEXT token=fixture-token userId=42"),
+    true,
+  );
+  // Non-serializable values do not survive the context file
+  assertEquals(stdout.includes("USE_CONTEXT response=undefined"), true);
+  assertEquals(stdout.includes("1/1 scenarios executed successfully"), true);
+  // Setup runs before the scenario files
+  assert(stdout.indexOf("setup-scenario-ran") < stdout.indexOf("USE_CONTEXT"));
+  // The temporary context file is removed afterwards
+  assertEquals(await exists(contextFileOf(stdout)), false);
+});
+
+Deno.test("CLI --setup excludes the setup file from the regular run", async () => {
+  // SETUP contains both setup.sf.ts and use-context.sf.ts
+  const { code, stdout } = await runCli([
+    "--setup",
+    join(SETUP, "setup.sf.ts"),
+    SETUP,
+  ]);
+  assertEquals(code, 0, stdout);
+  assertEquals(stdout.includes("Found 1 .sf.ts files:"), true);
+  assertEquals(stdout.split("setup-scenario-ran").length - 1, 1);
+  assertEquals(stdout.includes("USE_CONTEXT token=fixture-token"), true);
+});
+
+Deno.test("CLI --setup works together with --concurrency", async () => {
+  const { code, stdout } = await runCli([
+    "-c",
+    "2",
+    "--setup",
+    join(SETUP, "setup.sf.ts"),
+    SETUP,
+    CONCURRENT,
+  ]);
+  assertEquals(code, 0, stdout);
+  assertEquals(stdout.includes("Found 3 .sf.ts files:"), true);
+  assertEquals(stdout.includes("USE_CONTEXT token=fixture-token"), true);
+  assertEquals(stdout.includes("3/3 scenarios executed successfully"), true);
+});
+
+Deno.test("CLI --setup failure aborts with exit 1 and runs nothing else", async () => {
+  const { code, stdout, stderr } = await runCli([
+    "--setup",
+    join(SETUP_FAIL, "setup.sf.ts"),
+    join(SETUP, "use-context.sf.ts"),
+  ]);
+  assertEquals(code, 1);
+  assertEquals(stdout.includes("failing-setup-ran"), true);
+  assertEquals(stderr.includes("setup boom"), true);
+  assertEquals(stdout.includes("Setup failed"), true);
+  assertEquals(stdout.includes("USE_CONTEXT"), false);
+  assertEquals(stdout.includes("EXECUTION SUMMARY"), false);
+  assertEquals(await exists(contextFileOf(stdout)), false);
+});
+
+Deno.test("CLI --setup rejects a missing or non-.sf.ts file", async () => {
+  const missing = await runCli([
+    "--setup",
+    join(SETUP, "missing.sf.ts"),
+    SETUP,
+  ]);
+  assertEquals(missing.code, 1);
+  assertEquals(missing.stderr.includes("--setup"), true);
+  assertEquals(missing.stderr.includes("Path not found"), true);
+  assertEquals(missing.stdout.includes("Setup:"), false);
+
+  const notScenario = await runCli([
+    "--setup",
+    join(BASIC, "not-a-scenario.ts"),
+    SETUP,
+  ]);
+  assertEquals(notScenario.code, 1);
+  assertEquals(notScenario.stderr.includes("--setup"), true);
+});
+
+Deno.test("CLI without --setup: the scenario that needs the context fails", async () => {
+  const { code, stdout } = await runCli([join(SETUP, "use-context.sf.ts")]);
+  assertEquals(code, 1);
+  assertEquals(stdout.includes("USE_CONTEXT token=undefined"), true);
+});
+
 Deno.test("parseCliArgs parses options and defaults", () => {
   const defaults = parseCliArgs([]);
   assertEquals(defaults.paths, ["."]);
@@ -259,6 +382,7 @@ Deno.test("parseCliArgs parses options and defaults", () => {
   assertEquals(defaults.allowEmpty, false);
   assertEquals(defaults.filter, undefined);
   assertEquals(defaults.baseUrl, undefined);
+  assertEquals(defaults.setup, undefined);
   assertEquals(defaults.help, false);
 
   const full = parseCliArgs([
@@ -280,6 +404,12 @@ Deno.test("parseCliArgs parses options and defaults", () => {
 
   assertEquals(parseCliArgs(["--concurrency=2"]).concurrency, 2);
   assertEquals(parseCliArgs(["-h"]).help, true);
+  assertEquals(
+    parseCliArgs(["--setup", "x/setup.sf.ts", "a"]).setup,
+    "x/setup.sf.ts",
+  );
+  assertThrows(() => parseCliArgs(["--setup", ""]), Error, "--setup");
+  assertThrows(() => parseCliArgs(["--setup", "x.ts"]), Error, "--setup");
 
   // Numeric-looking positionals must stay strings
   assertEquals(parseCliArgs(["1e3"]).paths, ["1e3"]);

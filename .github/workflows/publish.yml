@@ -30,7 +30,7 @@ jobs:
       - name: Run tests
         run: |
           cd scenario-flow
-          deno test --allow-net --allow-read --allow-env --coverage=coverage
+          deno test --allow-net --allow-read --allow-env --allow-write --coverage=coverage
 
       - name: Check formatting
         run: |
