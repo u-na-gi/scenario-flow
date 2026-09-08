@@ -223,12 +223,16 @@ export class ScenarioLogger {
     expected?: unknown,
     actual?: unknown,
     location?: string,
+    source?: string,
   ): void {
     const where = location ? colors.gray + ` (at ${location})` : "";
     console.log(
       colors.red + colors.bright + "  ❌ ASSERTION FAILED: " + colors.reset +
         colors.red + message + colors.reset + where + colors.reset,
     );
+    if (source) {
+      console.log(colors.gray + "     " + source + colors.reset);
+    }
     if (expected !== undefined || actual !== undefined) {
       console.log(
         colors.green + "     expected: " + formatAssertValue(expected) +

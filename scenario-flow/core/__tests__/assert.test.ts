@@ -7,7 +7,11 @@ import {
   assertStringIncludes,
   assertThrows,
 } from "@std/assert";
-import { assert, ScenarioAssertionError } from "../assert.ts";
+import {
+  assert,
+  formatAssertValue,
+  ScenarioAssertionError,
+} from "../assert.ts";
 import { createCtx } from "../context.ts";
 import { ScenarioFlow } from "../index.ts";
 
@@ -58,6 +62,8 @@ Deno.test("assert.equal - default message and call-site location", () => {
   assertEquals(err.assertionMessage, "assert.equal failed");
   assertMatch(err.location ?? "", /assert\.test\.ts:\d+:\d+$/);
   assertStringIncludes(err.message, `(at ${err.location})`);
+  // source line is available because tests run with --allow-read
+  assertEquals(err.source, "const err = capture(() => assert.equal(1, 2));");
 });
 
 Deno.test("assert.deepEqual - is an alias of equal", () => {
@@ -83,7 +89,9 @@ Deno.test("assert.notEqual - passes on different, fails on equal", () => {
   assert.notEqual({ a: 1 }, { a: 2 });
   const err = capture(() => assert.notEqual([1], [1], "must differ"));
   assertEquals(err.assertionMessage, "must differ");
-  assertEquals(err.expected, "anything but [ 1 ]");
+  assertEquals(String(err.expected), "anything but [ 1 ]");
+  assertEquals(formatAssertValue(err.expected), "anything but [ 1 ]");
+  assertStringIncludes(err.message, "expected: anything but [ 1 ]\n");
   assertEquals(err.actual, [1]);
 });
 
@@ -93,7 +101,8 @@ Deno.test("assert.ok - passes on truthy, fails on falsy", () => {
   assert.ok(1);
   const err = capture(() => assert.ok(0, "zero is falsy"));
   assertEquals(err.assertionMessage, "zero is falsy");
-  assertEquals(err.expected, true);
+  assertEquals(String(err.expected), "truthy");
+  assertStringIncludes(err.message, "expected: truthy\n");
   assertEquals(err.actual, 0);
   capture(() => assert.ok(""));
   capture(() => assert.ok(null));
@@ -105,7 +114,8 @@ Deno.test("assert.exists - passes on defined, fails on null/undefined", () => {
   assert.exists(false);
   const err = capture(() => assert.exists(undefined, "token missing"));
   assertEquals(err.assertionMessage, "token missing");
-  assertEquals(err.expected, "not null or undefined");
+  assertEquals(String(err.expected), "not null or undefined");
+  assertStringIncludes(err.message, "expected: not null or undefined\n");
   assertEquals(err.actual, undefined);
   const err2 = capture(() => assert.exists(null));
   assertEquals(err2.actual, null);
@@ -191,11 +201,21 @@ Deno.test("ScenarioFlow - ctx.assert failure is logged with expected/actual and 
   assertStringIncludes(output, "📋 STEP: save tag filter");
   assertStringIncludes(output, "ASSERTION FAILED: save tag filter");
   assertMatch(output, /\(at .*assert\.test\.ts:\d+:\d+\)/);
+  assertStringIncludes(
+    output,
+    '     ctx.assert.deepEqual(["abc", "def"], ["abc"], "save tag filter");',
+  );
   assertStringIncludes(output, 'expected: [ "abc" ]');
   assertStringIncludes(output, 'actual:   [ "abc", "def" ]');
   assertStringIncludes(output, "SCENARIO FAILED");
   // The generic step error line is replaced by the assertion block
   assertEquals(output.includes('Error in step "save tag filter"'), false);
+  // Scenario-level error is a single line, not the full multi-line message
+  assertMatch(
+    output,
+    /Error in scenario "assert-scenario": ScenarioAssertionError: save tag filter$/m,
+  );
+  assertEquals(output.split('expected: [ "abc" ]').length, 2);
 });
 
 Deno.test("ScenarioFlow - raw @std/assert failure is logged as assertion failure", async () => {
@@ -215,6 +235,10 @@ Deno.test("ScenarioFlow - raw @std/assert failure is logged as assertion failure
   assertEquals(output.includes("expected: "), false);
   assertEquals(output.includes("actual:   "), false);
   assertEquals(output.includes('Error in step "compare"'), false);
+  assertStringIncludes(
+    output,
+    'Error in scenario "raw-assert-scenario": AssertionError: ',
+  );
 });
 
 Deno.test("ScenarioFlow - non-assertion errors keep the generic error log", async () => {

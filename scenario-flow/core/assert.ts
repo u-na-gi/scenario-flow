@@ -8,9 +8,26 @@ import {
   assertObjectMatch,
   assertStrictEquals,
 } from "@std/assert";
+import { fromFileUrl } from "@std/path";
 
 /** Maximum length of a formatted expected/actual value before truncation. */
 const MAX_VALUE_LENGTH = 500;
+
+/**
+ * Sentinel for descriptive expected values (e.g. "truthy") that should be
+ * printed as-is rather than as a quoted string.
+ */
+class DescribedValue {
+  constructor(readonly text: string) {}
+  toString(): string {
+    return this.text;
+  }
+  [Symbol.for("Deno.customInspect")](): string {
+    return this.text;
+  }
+}
+
+const describe = (text: string): DescribedValue => new DescribedValue(text);
 
 /**
  * Format a value for expected/actual display.
@@ -20,13 +37,17 @@ const MAX_VALUE_LENGTH = 500;
  */
 export function formatAssertValue(value: unknown): string {
   let text: string;
-  try {
-    text = Deno.inspect(value, { depth: 4, colors: false, compact: true });
-  } catch {
+  if (value instanceof DescribedValue) {
+    text = value.text;
+  } else {
     try {
-      text = JSON.stringify(value) ?? String(value);
+      text = Deno.inspect(value, { depth: 4, colors: false, compact: true });
     } catch {
-      text = String(value);
+      try {
+        text = JSON.stringify(value) ?? String(value);
+      } catch {
+        text = String(value);
+      }
     }
   }
   if (text.length > MAX_VALUE_LENGTH) {
@@ -106,6 +127,12 @@ interface CallSite {
   source?: string;
 }
 
+/**
+ * URL of this module, used to skip our own frames when locating the caller.
+ * Best-effort: if this module is bundled into another file, its frames share
+ * the bundle's URL with user code and the reported location may point inside
+ * the bundle instead of the scenario file.
+ */
 const SELF_URL = import.meta.url;
 const FRAME_RE =
   /\(?((?:file|https?|jsr|npm|data|blob):[^\s()]+?):(\d+):(\d+)\)?$/;
@@ -114,14 +141,15 @@ function toDisplayPath(url: string): string {
   if (!url.startsWith("file://")) return url;
   let path: string;
   try {
-    path = decodeURIComponent(new URL(url).pathname);
+    path = fromFileUrl(url);
   } catch {
     return url;
   }
   try {
-    const cwd = Deno.cwd().replace(/\\/g, "/");
-    if (path.startsWith(cwd + "/")) {
-      return "./" + path.substring(cwd.length + 1);
+    const cwd = Deno.cwd();
+    const sep = cwd.includes("\\") ? "\\" : "/";
+    if (path.startsWith(cwd + sep)) {
+      return "./" + path.substring(cwd.length + 1).replaceAll("\\", "/");
     }
   } catch {
     // no read permission: keep the absolute path
@@ -132,7 +160,7 @@ function toDisplayPath(url: string): string {
 function readSourceLine(url: string, line: number): string | undefined {
   if (!url.startsWith("file://")) return undefined;
   try {
-    const path = decodeURIComponent(new URL(url).pathname);
+    const path = fromFileUrl(url);
     const status = Deno.permissions.querySync({ name: "read", path });
     if (status.state !== "granted") return undefined;
     const text = Deno.readTextFileSync(path).split(/\r?\n/)[line - 1];
@@ -178,6 +206,10 @@ function captureCallSite(): CallSite | undefined {
  * standalone `assert` export). Thin wrappers over `@std/assert` that throw
  * `ScenarioAssertionError` carrying expected/actual values so failures are
  * printed in a uniform format inside the step log.
+ *
+ * Note: `ok` and `exists` use TypeScript assertion signatures, which only
+ * narrow when called through a stable reference such as `ctx.assert.ok(x)`.
+ * Destructuring (`const { assert } = ctx`) loses the narrowing (TS2775).
  */
 export interface ScenarioAssert {
   /** Deep equality (`assertEquals`). */
@@ -233,93 +265,91 @@ function wrap(
   }
 }
 
-/**
- * Create a `ScenarioAssert` instance.
- * @internal
- */
-export function createScenarioAssert(): ScenarioAssert {
-  const equal = <T>(actual: T, expected: T, msg?: string): void =>
-    wrap("assert.equal failed", msg, expected, actual, () => {
-      assertEquals(actual, expected);
-    });
-
-  return {
-    equal,
-    deepEqual: equal,
-
-    strictEqual<T>(actual: T, expected: T, msg?: string): void {
-      wrap("assert.strictEqual failed", msg, expected, actual, () => {
-        assertStrictEquals(actual, expected);
-      });
-    },
-
-    notEqual<T>(actual: T, expected: T, msg?: string): void {
-      wrap(
-        "assert.notEqual failed",
-        msg,
-        `anything but ${formatAssertValue(expected)}`,
-        actual,
-        () => {
-          assertNotEquals(actual, expected);
-        },
-      );
-    },
-
-    ok(value: unknown, msg?: string): asserts value {
-      wrap("assert.ok failed", msg, true, value, () => {
-        stdAssert(value);
-      });
-    },
-
-    exists<T>(value: T, msg?: string): asserts value is NonNullable<T> {
-      wrap("assert.exists failed", msg, "not null or undefined", value, () => {
-        assertExists(value);
-      });
-    },
-
-    match(actual: string, regex: RegExp, msg?: string): void {
-      wrap("assert.match failed", msg, regex, actual, () => {
-        assertMatch(actual, regex);
-      });
-    },
-
-    objectMatch(
-      actual: Record<PropertyKey, unknown>,
-      expected: Record<PropertyKey, unknown>,
-      msg?: string,
-    ): void {
-      wrap("assert.objectMatch failed", msg, expected, actual, () => {
-        assertObjectMatch(actual, expected);
-      });
-    },
-
-    status(res: Response, expected: number | number[], msg?: string): void {
-      const allowed = Array.isArray(expected) ? expected : [expected];
-      wrap(
-        `assert.status failed: expected ${
-          allowed.join(" | ")
-        } but got ${res.status} ${res.statusText}`.trimEnd(),
-        msg,
-        expected,
-        res.status,
-        () => {
-          stdAssert(allowed.includes(res.status));
-        },
-      );
-    },
-
-    fail(msg?: string): never {
-      const site = captureCallSite();
-      throw new ScenarioAssertionError(msg ?? "assert.fail called", {
-        location: site?.location,
-        source: site?.source,
-      });
-    },
-  };
-}
+const equal = <T>(actual: T, expected: T, msg?: string): void =>
+  wrap("assert.equal failed", msg, expected, actual, () => {
+    assertEquals(actual, expected);
+  });
 
 /**
  * Standalone assertion helpers, identical to `ctx.assert`.
  * Useful in helper functions that do not receive the context.
  */
-export const assert: ScenarioAssert = createScenarioAssert();
+export const assert: ScenarioAssert = {
+  equal,
+  deepEqual: equal,
+
+  strictEqual<T>(actual: T, expected: T, msg?: string): void {
+    wrap("assert.strictEqual failed", msg, expected, actual, () => {
+      assertStrictEquals(actual, expected);
+    });
+  },
+
+  notEqual<T>(actual: T, expected: T, msg?: string): void {
+    wrap(
+      "assert.notEqual failed",
+      msg,
+      describe(`anything but ${formatAssertValue(expected)}`),
+      actual,
+      () => {
+        assertNotEquals(actual, expected);
+      },
+    );
+  },
+
+  ok(value: unknown, msg?: string): asserts value {
+    wrap("assert.ok failed", msg, describe("truthy"), value, () => {
+      stdAssert(value);
+    });
+  },
+
+  exists<T>(value: T, msg?: string): asserts value is NonNullable<T> {
+    wrap(
+      "assert.exists failed",
+      msg,
+      describe("not null or undefined"),
+      value,
+      () => {
+        assertExists(value);
+      },
+    );
+  },
+
+  match(actual: string, regex: RegExp, msg?: string): void {
+    wrap("assert.match failed", msg, regex, actual, () => {
+      assertMatch(actual, regex);
+    });
+  },
+
+  objectMatch(
+    actual: Record<PropertyKey, unknown>,
+    expected: Record<PropertyKey, unknown>,
+    msg?: string,
+  ): void {
+    wrap("assert.objectMatch failed", msg, expected, actual, () => {
+      assertObjectMatch(actual, expected);
+    });
+  },
+
+  status(res: Response, expected: number | number[], msg?: string): void {
+    const allowed = Array.isArray(expected) ? expected : [expected];
+    wrap(
+      `assert.status failed: expected ${
+        allowed.join(" | ")
+      } but got ${res.status} ${res.statusText}`.trimEnd(),
+      msg,
+      expected,
+      res.status,
+      () => {
+        stdAssert(allowed.includes(res.status));
+      },
+    );
+  },
+
+  fail(msg?: string): never {
+    const site = captureCallSite();
+    throw new ScenarioAssertionError(msg ?? "assert.fail called", {
+      location: site?.location,
+      source: site?.source,
+    });
+  },
+};

@@ -189,6 +189,7 @@ export class ScenarioFlow implements ScenarioFlowChain {
               error.expected,
               error.actual,
               error.location,
+              error.source,
             );
           } else if (isAssertionError(error)) {
             // Raw @std/assert AssertionError: expected/actual are not available
@@ -214,7 +215,16 @@ export class ScenarioFlow implements ScenarioFlowChain {
     try {
       await this.run();
     } catch (error) {
-      logger.logError(`Error in scenario "${this.scenarioName}": ${error}`);
+      if (isAssertionError(error)) {
+        // Already printed in full inside the step block: keep this to one line
+        const e = error as Error & { assertionMessage?: string };
+        const summary = e.assertionMessage ?? e.message.split("\n")[0];
+        logger.logError(
+          `Error in scenario "${this.scenarioName}": ${e.name}: ${summary}`,
+        );
+      } else {
+        logger.logError(`Error in scenario "${this.scenarioName}": ${error}`);
+      }
       throw error;
     }
   }

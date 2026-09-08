@@ -134,6 +134,10 @@ same helpers are exported as `assert` from the package for use outside a step.
 Raw `@std/assert` failures thrown inside a step are also reported as
 `ASSERTION FAILED` (without expected/actual values).
 
+Note: `ok` and `exists` use TypeScript assertion signatures, so call them
+through a stable reference (`ctx.assert.ok(value)`); destructuring
+(`const { assert } = ctx; assert.ok(value)`) defeats type narrowing (TS2775).
+
 ## Advanced Usage
 
 ### Chaining Scenarios
