@@ -6,6 +6,7 @@ import type {
   ScenarioFlowRequest,
 } from "../type.ts";
 import { createCtx } from "../context.ts";
+import { permissionTestOptions } from "./permissions.ts";
 
 Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
   // Mock fetch globally for this test
@@ -366,17 +367,12 @@ function restoreEnv(name: string, value: string | undefined): void {
   }
 }
 
-// These tests need a real local server and the SF_LOG_BINARY variable.
-// Deno.test permissions can only narrow the parent's permissions, so skip
-// when `deno test` was started without --allow-net / --allow-env.
-const hasBinaryLogPermissions =
-  Deno.permissions.querySync({ name: "net" }).state === "granted" &&
-  Deno.permissions.querySync({ name: "env", variable: "SF_LOG_BINARY" })
-      .state === "granted";
-const binaryLogTestOptions = {
-  permissions: { net: true, env: ["SF_LOG_BINARY"] },
-  ignore: !hasBinaryLogPermissions,
-};
+// These tests need a real local server and the SF_LOG_BINARY variable; they
+// are ignored when `deno test` runs without --allow-net / --allow-env.
+const binaryLogTestOptions = permissionTestOptions({
+  net: true,
+  env: ["SF_LOG_BINARY"],
+});
 
 Deno.test({
   name:

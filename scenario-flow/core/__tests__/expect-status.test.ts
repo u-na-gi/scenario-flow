@@ -1,6 +1,11 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { ScenarioFlow } from "../index.ts";
 import { logger } from "../logger.ts";
+import { permissionTestOptions } from "./permissions.ts";
+
+// Tests against the local server need --allow-net; they are ignored under a
+// bare `deno test` (see ./permissions.ts).
+const netTest = permissionTestOptions({ net: true });
 
 /**
  * Start a local HTTP server on a random port that answers with the status
@@ -48,7 +53,10 @@ async function captureLog(
   return lines;
 }
 
-Deno.test("expectStatus - matching 401 returns the Response", async () => {
+Deno.test({
+  name: "expectStatus - matching 401 returns the Response",
+  ...netTest,
+}, async () => {
   const { server, baseUrl } = startStatusServer();
   try {
     const flow = new ScenarioFlow("expectStatus match", {
@@ -79,7 +87,10 @@ Deno.test("expectStatus - matching 401 returns the Response", async () => {
   }
 });
 
-Deno.test("expectStatus - list of statuses matches any of them", async () => {
+Deno.test({
+  name: "expectStatus - list of statuses matches any of them",
+  ...netTest,
+}, async () => {
   const { server, baseUrl } = startStatusServer();
   try {
     const flow = new ScenarioFlow("expectStatus list", { apiBaseUrl: baseUrl });
@@ -110,7 +121,10 @@ Deno.test("expectStatus - list of statuses matches any of them", async () => {
   }
 });
 
-Deno.test("expectStatus - mismatch throws with a clear message", async () => {
+Deno.test({
+  name: "expectStatus - mismatch throws with a clear message",
+  ...netTest,
+}, async () => {
   const { server, baseUrl } = startStatusServer();
   try {
     const flow = new ScenarioFlow("expectStatus mismatch", {
@@ -136,7 +150,10 @@ Deno.test("expectStatus - mismatch throws with a clear message", async () => {
   }
 });
 
-Deno.test("throwOnError=false - returns the Response for 500", async () => {
+Deno.test({
+  name: "throwOnError=false - returns the Response for 500",
+  ...netTest,
+}, async () => {
   const { server, baseUrl } = startStatusServer();
   try {
     const flow = new ScenarioFlow("throwOnError false", {
@@ -159,7 +176,10 @@ Deno.test("throwOnError=false - returns the Response for 500", async () => {
   }
 });
 
-Deno.test("throwOnError=false - expectStatus mismatch does not throw", async () => {
+Deno.test({
+  name: "throwOnError=false - expectStatus mismatch does not throw",
+  ...netTest,
+}, async () => {
   const { server, baseUrl } = startStatusServer();
   try {
     const flow = new ScenarioFlow("throwOnError false + expectStatus", {
@@ -183,7 +203,10 @@ Deno.test("throwOnError=false - expectStatus mismatch does not throw", async () 
   }
 });
 
-Deno.test("default - non-2xx still throws HTTP error", async () => {
+Deno.test({
+  name: "default - non-2xx still throws HTTP error",
+  ...netTest,
+}, async () => {
   const { server, baseUrl } = startStatusServer();
   try {
     const flow = new ScenarioFlow("default throws", { apiBaseUrl: baseUrl });

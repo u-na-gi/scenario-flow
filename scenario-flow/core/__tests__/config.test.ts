@@ -11,8 +11,17 @@ import type {
   ResolvedScenarioFlowConfig,
   ScenarioFlowConfig,
 } from "../type.ts";
+import { permissionTestOptions } from "./permissions.ts";
 
 const ENV = DEFAULT_API_BASE_URL_ENV_KEY;
+
+// Tests that set environment variables need --allow-env; they are ignored
+// under a bare `deno test` (see ./permissions.ts).
+const envTest = permissionTestOptions({ env: [ENV, "MY_API_URL"] });
+const envNetTest = permissionTestOptions({
+  net: true,
+  env: [ENV, "MY_API_URL"],
+});
 
 /** Run `fn` with the given env vars set, restoring the previous state after. */
 async function withEnv(
@@ -50,7 +59,10 @@ async function configOf(
   return resolved!;
 }
 
-Deno.test("resolveConfig - string config is unchanged without env", async () => {
+Deno.test({
+  name: "resolveConfig - string config is unchanged without env",
+  ...envTest,
+}, async () => {
   await withEnv({ [ENV]: undefined }, () => {
     const config: ScenarioFlowConfig = {
       apiBaseUrl: "https://api.example.com",
@@ -62,7 +74,10 @@ Deno.test("resolveConfig - string config is unchanged without env", async () => 
   });
 });
 
-Deno.test("resolveConfig - function config is called once at resolution", async () => {
+Deno.test({
+  name: "resolveConfig - function config is called once at resolution",
+  ...envTest,
+}, async () => {
   await withEnv({ [ENV]: undefined }, () => {
     let calls = 0;
     const resolved = resolveConfig({
@@ -76,7 +91,10 @@ Deno.test("resolveConfig - function config is called once at resolution", async 
   });
 });
 
-Deno.test("resolveConfig - object config uses default without env", async () => {
+Deno.test({
+  name: "resolveConfig - object config uses default without env",
+  ...envTest,
+}, async () => {
   await withEnv({ [ENV]: undefined, MY_API_URL: undefined }, () => {
     assertEquals(
       resolveConfig({ apiBaseUrl: { default: "https://default.example.com" } })
@@ -95,7 +113,11 @@ Deno.test("resolveConfig - object config uses default without env", async () => 
   });
 });
 
-Deno.test("resolveConfig - object config with custom envKey is overridden by that env", async () => {
+Deno.test({
+  name:
+    "resolveConfig - object config with custom envKey is overridden by that env",
+  ...envTest,
+}, async () => {
   await withEnv(
     {
       [ENV]: "https://sf.example.com",
@@ -114,7 +136,11 @@ Deno.test("resolveConfig - object config with custom envKey is overridden by tha
   );
 });
 
-Deno.test("resolveConfig - SF_API_BASE_URL takes precedence over every config form", async () => {
+Deno.test({
+  name:
+    "resolveConfig - SF_API_BASE_URL takes precedence over every config form",
+  ...envTest,
+}, async () => {
   await withEnv({ [ENV]: "https://env.example.com" }, () => {
     let fnCalls = 0;
     assertEquals(
@@ -139,7 +165,10 @@ Deno.test("resolveConfig - SF_API_BASE_URL takes precedence over every config fo
   });
 });
 
-Deno.test("resolveConfig - empty env value is treated as unset", async () => {
+Deno.test({
+  name: "resolveConfig - empty env value is treated as unset",
+  ...envTest,
+}, async () => {
   await withEnv({ [ENV]: "" }, () => {
     assertEquals(
       resolveConfig({ apiBaseUrl: "https://string.example.com" }).apiBaseUrl,
@@ -179,7 +208,10 @@ Deno.test("readEnvVar - does not throw when Deno.env.get is not permitted", () =
   }
 });
 
-Deno.test("resolveApiBaseUrl - env override is logged once per process", async () => {
+Deno.test({
+  name: "resolveApiBaseUrl - env override is logged once per process",
+  ...permissionTestOptions({ env: ["SF_TEST_LOG_ONCE_KEY"] }),
+}, async () => {
   const key = "SF_TEST_LOG_ONCE_KEY";
   await withEnv({ [key]: "https://logged.example.com" }, () => {
     const originalLog = console.log;
@@ -201,7 +233,11 @@ Deno.test("resolveApiBaseUrl - env override is logged once per process", async (
   });
 });
 
-Deno.test("ScenarioFlow - constructor resolves apiBaseUrl and getConfig returns a string", async () => {
+Deno.test({
+  name:
+    "ScenarioFlow - constructor resolves apiBaseUrl and getConfig returns a string",
+  ...envTest,
+}, async () => {
   await withEnv({ [ENV]: undefined }, async () => {
     const flow = new ScenarioFlow("fn", {
       apiBaseUrl: () => "https://fn.example.com",
@@ -217,7 +253,11 @@ Deno.test("ScenarioFlow - constructor resolves apiBaseUrl and getConfig returns 
   });
 });
 
-Deno.test("ScenarioFlow - inherited config is already resolved (no double resolution)", async () => {
+Deno.test({
+  name:
+    "ScenarioFlow - inherited config is already resolved (no double resolution)",
+  ...envTest,
+}, async () => {
   await withEnv({ [ENV]: undefined }, async () => {
     let calls = 0;
     const parent = new ScenarioFlow("parent", {
@@ -240,7 +280,10 @@ Deno.test("ScenarioFlow - inherited config is already resolved (no double resolu
   });
 });
 
-Deno.test("createCtx - stores the resolved config as-is (no re-resolution)", async () => {
+Deno.test({
+  name: "createCtx - stores the resolved config as-is (no re-resolution)",
+  ...envTest,
+}, async () => {
   await withEnv({ [ENV]: "https://env.example.com" }, () => {
     const fetcher = () => Promise.resolve(new Response("ok"));
     // createCtx takes an already resolved config and must not consult env again
@@ -253,7 +296,11 @@ Deno.test("createCtx - stores the resolved config as-is (no re-resolution)", asy
   });
 });
 
-Deno.test("ScenarioFlow - custom envKey wins over SF_API_BASE_URL for getConfig and the request URL", async () => {
+Deno.test({
+  name:
+    "ScenarioFlow - custom envKey wins over SF_API_BASE_URL for getConfig and the request URL",
+  ...envNetTest,
+}, async () => {
   const requests: string[] = [];
   const server = Deno.serve(
     { port: 0, hostname: "127.0.0.1", onListen: () => {} },
@@ -289,7 +336,11 @@ Deno.test("ScenarioFlow - custom envKey wins over SF_API_BASE_URL for getConfig 
   }
 });
 
-Deno.test("Integration - request goes to SF_API_BASE_URL instead of configured apiBaseUrl", async () => {
+Deno.test({
+  name:
+    "Integration - request goes to SF_API_BASE_URL instead of configured apiBaseUrl",
+  ...envNetTest,
+}, async () => {
   const requests: string[] = [];
   const server = Deno.serve(
     { port: 0, hostname: "127.0.0.1", onListen: () => {} },

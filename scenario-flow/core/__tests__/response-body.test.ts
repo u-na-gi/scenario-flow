@@ -11,18 +11,13 @@ import {
   TEXT_PREVIEW_BYTES,
 } from "../response-body.ts";
 import { ScenarioLogger } from "../logger.ts";
+import { permissionTestOptions } from "./permissions.ts";
 
 const encoder = new TextEncoder();
 
-// Deno.test permissions can only narrow the parent's permissions, so the
-// env-dependent tests are skipped when `deno test` runs without --allow-env.
-const hasEnvPermission =
-  Deno.permissions.querySync({ name: "env", variable: "SF_LOG_BINARY" })
-    .state === "granted";
-const envTestOptions = {
-  permissions: { env: ["SF_LOG_BINARY"] },
-  ignore: !hasEnvPermission,
-};
+// The env-dependent tests are ignored when `deno test` runs without
+// --allow-env (see ./permissions.ts).
+const envTestOptions = permissionTestOptions({ env: ["SF_LOG_BINARY"] });
 
 /** Run `fn` with console.log captured; returns the captured lines. */
 function captureLog(fn: () => void): string[] {
