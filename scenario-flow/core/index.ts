@@ -132,8 +132,15 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     }
 
     if (arg instanceof ScenarioFlow) {
-      this.config = arg.config;
-      this.ctx = arg.ctx;
+      // The child gets its own config, fetcher and context object. Sharing the
+      // parent's ctx by reference made sibling scenarios leak values into each
+      // other and into the parent (#8). The parent's current values are copied
+      // as a snapshot; the parent's steps run again inside this scenario's
+      // execute() against this scenario's ctx.
+      this.config = { ...arg.config };
+      const fetcher = this.createFetcher();
+      this.ctx = createCtx(fetcher, this.config);
+      this.ctx.merge(arg.ctx);
       this.steps = [...arg.steps];
       return;
     }

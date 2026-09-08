@@ -114,6 +114,13 @@ const getData = login.extend<GetDataCtx>("Get data")
 await getData.execute();
 ```
 
+**Inheriting copies the context; it is never shared.** A child scenario gets its
+own context object (seeded with a shallow copy of the values the parent holds at
+construction time) and its own copy of the config. The parent's steps run again
+inside the child's `execute()` against the child's context, so two children of
+the same parent (e.g. many scenarios built on `login`) never see each other's
+values, and children never write into the parent's context.
+
 An untyped scenario (no type argument) behaves like `Record<string, unknown>`:
 any key is allowed, `getContext(key)` returns `unknown` and `getContext<T>(key)`
 returns `T | undefined`. Combining a typed and an untyped scenario keeps the

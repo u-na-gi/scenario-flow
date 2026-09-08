@@ -9,7 +9,10 @@ modules.
 
 - **`context.test.ts`** - Tests for the ScenarioFlowContext implementation
 - **`index.test.ts`** - Tests for the main ScenarioFlow class
-- **`type.test.ts`** - Tests for type definitions and interfaces
+- **`type.test.ts`** - Tests for type definitions and interfaces, including
+  compile-time checks of the typed scenario context (`ScenarioFlow<Ctx>`)
+- **`inherit.test.ts`** - Regression tests for context isolation when a scenario
+  inherits a parent (issue #8)
 - **`store.test.ts`** - Tests for the store module
 - **`integration.test.ts`** - Integration tests that test modules working
   together
