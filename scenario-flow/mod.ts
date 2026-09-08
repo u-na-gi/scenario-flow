@@ -48,3 +48,8 @@ export * from "./core/index.ts";
 export * from "./core/context.ts";
 export * from "./core/type.ts";
 export * from "./core/logger.ts";
+export {
+  describeResponseBody,
+  type DescribeResponseBodyOptions,
+  type ResponseBodyLog,
+} from "./core/response-body.ts";

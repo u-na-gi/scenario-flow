@@ -11,6 +11,8 @@ modules.
 - **`index.test.ts`** - Tests for the main ScenarioFlow class
 - **`type.test.ts`** - Tests for type definitions and interfaces
 - **`store.test.ts`** - Tests for the store module
+- **`response-body.test.ts`** - Tests for response body classification (text vs
+  binary), byte sniffing, hex dump formatting and logger output
 - **`integration.test.ts`** - Integration tests that test modules working
   together
 - **`status.test.ts`** - Unit tests for the fetcher status-check helpers
@@ -68,13 +70,24 @@ modules.
 - ✅ Multiple call support
 - ✅ Function signature validation
 
-### integration.test.ts (5 tests)
+### response-body.test.ts (22 tests)
+
+- ✅ Content-Type classification (text / binary / unknown)
+- ✅ Byte sniffing (control characters, invalid UTF-8, sniff window)
+- ✅ Hex dump formatting and `SF_LOG_BINARY=hex`
+- ✅ `describeResponseBody` decisions
+- ✅ `ScenarioLogger.logResponse` output for text and binary bodies
+
+### integration.test.ts (7 tests)
 
 - ✅ Real-world workflow simulation (login → get user → get data)
 - ✅ ScenarioFlow chaining with context sharing
 - ✅ Error handling in complex scenarios
 - ✅ Context isolation between instances
 - ✅ Direct createCtx function usage
+- ✅ Binary (octet-stream / protobuf / untyped) responses logged as
+  `[Binary Data]` against a local `Deno.serve`
+- ✅ `SF_LOG_BINARY=hex` hex dump of the first 64 bytes
 
 ## Running Tests
 
@@ -82,6 +95,10 @@ modules.
 # Run all tests in the core module
 cd scenario-flow
 deno test
+
+# Include the tests that need a local server / SF_LOG_BINARY
+# (they are skipped without these permissions)
+deno test --allow-net --allow-read --allow-env
 
 # Run specific test file
 deno test core/__tests__/context.test.ts
