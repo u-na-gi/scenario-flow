@@ -1,40 +1,40 @@
-📦 Deno Run CodeLens 拡張の作り方（VS Code Extension）
+📦 How to build the Deno Run CodeLens extension (VS Code Extension)
 
-この拡張は、TypeScript ファイル内に `if (import.meta.main)`
-がある場合、その行の上に "▶ Run with Deno" という CodeLens
-を表示し、クリックするとそのファイルを `deno run` で実行します。
+This extension shows a "▶ Run with Deno" CodeLens above any
+`if (import.meta.main)` line in a TypeScript file. Clicking it runs the file
+with `deno run`.
 
 ---
 
-✅ 必要ツール
+✅ Required tools
 
 - Node.js
-- `yo` と `generator-code`（VS Code 拡張テンプレートジェネレーター）
-- `vsce`（VS Code 拡張のパッケージ化用）
+- `yo` and `generator-code` (VS Code extension template generator)
+- `vsce` (for packaging the VS Code extension)
 
-インストール：
+Install:
 
 npm install -g yo generator-code vsce
 
 ---
 
-🚀 初期化
+🚀 Scaffold the project
 
-選択肢:
+Choices:
 
 - Extension Type: New Extension (TypeScript)
-- Extension Name: 任意 (例: deno-run-codelens)
-- その他は Enter で進めてOK
+- Extension Name: anything you like (e.g. deno-run-codelens)
+- Press Enter to accept the defaults for everything else
 
 ---
 
-📁 プロジェクト移動
+📁 Move into the project
 
 cd deno-run-codelens
 
 ---
 
-🛠 src/extension.ts を以下のように編集
+🛠 Edit src/extension.ts as follows
 
 // src/extension.ts import * as vscode from "vscode";
 
@@ -74,7 +74,7 @@ lenses: vscode.CodeLens[] = [];
 
 ---
 
-🧩 package.json に追記
+🧩 Add to package.json
 
 "contributes": { "commands": [ { "command": "extension.runDenoMain", "title":
 "Run this file with Deno" } ], "languages": [ { "id": "typescript",
@@ -82,42 +82,42 @@ lenses: vscode.CodeLens[] = [];
 
 ---
 
-🧪 開発中にデバッグ実行したい場合
+🧪 Debugging during development
 
-1. `npm install` を実行して依存関係を入れる
-2. VS Code で `code .` を実行して開く
-3. `F5` を押すと「Extension Development Host」が立ち上がる
-4. `if (import.meta.main)` を含む `.ts` ファイルを開くと "▶ Run with Deno"
-   が表示される
+1. Run `npm install` to install the dependencies
+2. Open the project in VS Code with `code .`
+3. Press `F5` to launch the "Extension Development Host"
+4. Open a `.ts` file that contains `if (import.meta.main)` and the "▶ Run with
+   Deno" CodeLens appears
 
 ---
 
-📦 拡張をビルドして自分の VS Code にインストールする
+📦 Build the extension and install it into your own VS Code
 
-1. `.vsix` ファイルの作成（拡張ディレクトリで実行）：
+1. Create the `.vsix` file (run inside the extension directory):
 
    vsce package
 
-   → `your-extension-name-0.0.1.vsix` が生成される
+   → `your-extension-name-0.0.1.vsix` is generated
 
-2. インストール方法（どちらか）
+2. Install it (either way works)
 
-   コマンドで：
+   From the command line:
 
    code --install-extension your-extension-name-0.0.1.vsix
 
-   または GUI で：
+   Or from the GUI:
 
-   - `.vsix` ファイルを VS Code ウィンドウにドラッグ＆ドロップ
-   - またはコマンドパレットで "Extensions: Install from VSIX..." を選択
+   - Drag and drop the `.vsix` file onto a VS Code window
+   - Or choose "Extensions: Install from VSIX..." from the Command Palette
 
-3. アップデートしたい場合：
+3. To update an existing installation:
 
    code --install-extension your-extension-name-0.0.1.vsix --force
 
 ---
 
-✅ 使用例
+✅ Usage example
 
 // main.ts import { login } from "./login.ts";
 
@@ -125,9 +125,10 @@ if (import.meta.main) { await login.execute(); }
 
 ---
 
-✅ 拡張の発展アイデア
+✅ Ideas for extending the extension
 
-- `function main()` にも CodeLens を出す
-- `deno.json` を読み込んで `--allow-*` や `importMap` を自動補完
-- `Run with Deno (no permissions)` モードも選べるようにする
-- `deno lint` / `fmt` 連携
+- Show a CodeLens on `function main()` as well
+- Read `deno.json` to fill in `--allow-*` flags and the `importMap`
+  automatically
+- Offer a `Run with Deno (no permissions)` mode
+- Integrate with `deno lint` / `fmt`

@@ -18,7 +18,7 @@ const getData = new ScenarioFlow("Get some data", login)
       },
     );
 
-    console.log("データ取得成功");
+    console.log("Data fetched successfully");
   });
 
 if (import.meta.main) {
