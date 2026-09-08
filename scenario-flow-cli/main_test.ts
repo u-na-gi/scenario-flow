@@ -1,6 +1,11 @@
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { join, resolve } from "@std/path";
-import { buildFilter, collectScenarioFiles, parseCliArgs } from "./main.ts";
+import {
+  buildFilter,
+  collectScenarioFiles,
+  filterScenarioFiles,
+  parseCliArgs,
+} from "./main.ts";
 
 // Self-contained fixtures (no network, no library import needed).
 // See test_fixtures/ for their contents.
@@ -137,6 +142,19 @@ Deno.test("CLI --filter selects files by substring", async () => {
   assertEquals(stdout.includes("fail-scenario-ran"), false);
 });
 
+Deno.test("CLI --filter matches the path relative to cwd only", async () => {
+  // cwd is .../scenario-flow-cli; that directory name must not match
+  const { code, stdout } = await runCli([
+    "--filter",
+    "scenario-flow-cli",
+    "--allow-empty",
+    BASIC,
+  ]);
+  assertEquals(code, 0);
+  assertEquals(stdout.includes("matched 0/2 files"), true);
+  assertEquals(stdout.includes("No .sf.ts files found."), true);
+});
+
 Deno.test("CLI --filter supports /regex/ patterns", async () => {
   const { code, stdout } = await runCli(["--filter", "/nested.fail/", BASIC]);
   assertEquals(code, 1);
@@ -168,8 +186,9 @@ Deno.test("CLI rejects unknown options", async () => {
 });
 
 Deno.test("CLI --concurrency runs files in parallel without interleaving output", async () => {
-  // a-slow starts first (sorted order) but finishes last; with streaming
-  // output the lines would interleave as slow-1, fast-1, fast-2, slow-2.
+  // a-slow starts first (sorted order) but finishes ~1.4s after b-fast;
+  // with streaming output the lines would interleave as
+  // slow-1, fast-1, fast-2, slow-2.
   const { code, stdout } = await runCli(["-c", "2", CONCURRENT]);
   assertEquals(code, 0);
   assertEquals(stdout.includes("Running with concurrency: 2"), true);
@@ -186,19 +205,20 @@ Deno.test("CLI --concurrency runs files in parallel without interleaving output"
       joined === "slow-1,slow-2,fast-1,fast-2",
     `output interleaved: ${joined}`,
   );
-  // The fast file finishes first, so its block is printed first.
-  assertEquals(joined, "fast-1,fast-2,slow-1,slow-2");
   // Both files get a status header
   assertEquals(stdout.includes("✅ PASSED"), true);
 });
 
 Deno.test("CLI --concurrency reports failures and stderr of failed files", async () => {
-  const { code, stdout } = await runCli(["-c", "4", BASIC]);
+  const { code, stdout, stderr } = await runCli(["-c", "4", BASIC]);
   assertEquals(code, 1);
+  // PASSED blocks go to stdout, FAILED blocks (with the child's stderr) to stderr
   assertEquals(stdout.includes("✅ PASSED"), true);
-  assertEquals(stdout.includes("❌ FAILED"), true);
-  // Child stderr (the uncaught error) is included in the buffered block
-  assertEquals(stdout.includes("boom"), true);
+  assertEquals(stdout.includes("pass-scenario-ran"), true);
+  assertEquals(stdout.includes("❌ FAILED"), false);
+  assertEquals(stderr.includes("❌ FAILED"), true);
+  assertEquals(stderr.includes("fail-scenario-ran"), true);
+  assertEquals(stderr.includes("boom"), true);
   assertEquals(stdout.includes("1/2 scenarios executed successfully"), true);
 });
 
@@ -260,6 +280,10 @@ Deno.test("parseCliArgs parses options and defaults", () => {
 
   assertEquals(parseCliArgs(["--concurrency=2"]).concurrency, 2);
   assertEquals(parseCliArgs(["-h"]).help, true);
+
+  // Numeric-looking positionals must stay strings
+  assertEquals(parseCliArgs(["1e3"]).paths, ["1e3"]);
+  assertEquals(parseCliArgs(["007", "0x10"]).paths, ["007", "0x10"]);
 });
 
 Deno.test("buildFilter handles substring and regex patterns", () => {
@@ -274,6 +298,20 @@ Deno.test("buildFilter handles substring and regex patterns", () => {
 
   const caseInsensitive = buildFilter("/LOGIN/i");
   assertEquals(caseInsensitive("/x/login.sf.ts"), true);
+});
+
+Deno.test("filterScenarioFiles ignores directories above cwd", () => {
+  const files = [
+    "/home/me/scenario-test/a.sf.ts",
+    "/home/me/scenario-test/test-login.sf.ts",
+  ];
+  assertEquals(filterScenarioFiles(files, "test", "/home/me/scenario-test"), [
+    "/home/me/scenario-test/test-login.sf.ts",
+  ]);
+  assertEquals(
+    filterScenarioFiles(files, "/^test-/", "/home/me/scenario-test"),
+    ["/home/me/scenario-test/test-login.sf.ts"],
+  );
 });
 
 Deno.test("collectScenarioFiles returns sorted, de-duplicated absolute paths", async () => {

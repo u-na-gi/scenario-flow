@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-run
 
-import { resolve } from "@std/path";
+import { relative, resolve } from "@std/path";
 import { walk } from "@std/fs";
 import { parseArgs } from "@std/cli/parse-args";
 import { logger } from "../scenario-flow/core/logger.ts";
@@ -51,9 +51,11 @@ OPTIONS:
                            (default: 1). When n > 1, each file's output is
                            buffered and printed as one block when the file
                            finishes, so logs of different files never mix.
-      --filter <pattern>   Only run files whose path contains <pattern>.
-                           Use /regex/ (optionally /regex/i) for a regular
-                           expression match.
+                           Blocks of passed files go to stdout, blocks of
+                           failed files go to stderr.
+      --filter <pattern>   Only run files whose path (relative to the current
+                           directory) contains <pattern>. Use /regex/
+                           (optionally /regex/i) for a regular expression.
       --base-url <url>     Override apiBaseUrl of every scenario by passing
                            SF_API_BASE_URL=<url> to the child processes.
       --allow-empty        Exit with 0 even when no .sf.ts files are found.
@@ -72,7 +74,7 @@ EXAMPLES:
   sfcli ./scenarios ./more/login.sf.ts   # Mix directories and single files
   sfcli ./scenarios/*.sf.ts          # Shell globs work as multiple files
   sfcli --filter login ./scenarios   # Only files whose path contains "login"
-  sfcli --filter /user|auth/ .       # Regex filter
+  sfcli --filter '/user|auth/i' .    # Regex filter (case-insensitive)
   sfcli -c 4 ./scenarios             # Run 4 files at a time
   sfcli --base-url http://localhost:8080/ ./scenarios
 `);
@@ -86,7 +88,7 @@ export function parseCliArgs(args: string[]): CliOptions {
   const unknownFlags: string[] = [];
   const parsed = parseArgs(args, {
     boolean: ["help", "allow-empty"],
-    string: ["concurrency", "filter", "base-url"],
+    string: ["_", "concurrency", "filter", "base-url"],
     alias: { h: "help", c: "concurrency" },
     unknown: (arg: string, key?: string) => {
       // Positional arguments (no key) are accepted; unknown flags are not.
@@ -148,6 +150,19 @@ export function buildFilter(pattern: string): (path: string) => boolean {
     return (path) => regex.test(path);
   }
   return (path) => path.includes(pattern);
+}
+
+/**
+ * Applies a --filter pattern to the paths relative to the current working
+ * directory, so that directory names above the cwd never match.
+ */
+export function filterScenarioFiles(
+  files: string[],
+  pattern: string,
+  cwd: string = Deno.cwd(),
+): string[] {
+  const matches = buildFilter(pattern);
+  return files.filter((file) => matches(relative(cwd, file)));
 }
 
 /**
@@ -251,9 +266,23 @@ async function executeScenarioFile(
 }
 
 /**
+ * Writes the whole buffer synchronously, looping over partial writes.
+ */
+function writeAllSync(
+  writer: { writeSync(p: Uint8Array): number },
+  data: Uint8Array,
+): void {
+  let written = 0;
+  while (written < data.length) {
+    written += writer.writeSync(data.subarray(written));
+  }
+}
+
+/**
  * Prints a buffered result as one contiguous block.
- * Everything is written with a single synchronous call so that blocks of
- * concurrently finishing files can never interleave.
+ * PASSED blocks go to stdout and FAILED blocks to stderr, each written with
+ * a single synchronous call so that blocks of concurrently finishing files
+ * can never interleave.
  */
 function printBufferedResult(result: ScenarioResult): void {
   const status = result.success ? "✅ PASSED" : "❌ FAILED";
@@ -267,7 +296,8 @@ function printBufferedResult(result: ScenarioResult): void {
     body += result.stderr;
   }
   if (body.length > 0 && !body.endsWith("\n")) body += "\n";
-  Deno.stdout.writeSync(new TextEncoder().encode(header + body));
+  const target = result.success ? Deno.stdout : Deno.stderr;
+  writeAllSync(target, new TextEncoder().encode(header + body));
 }
 
 /**
@@ -325,7 +355,7 @@ export async function main(args: string[] = Deno.args): Promise<number> {
   }
 
   const scenarioFiles = options.filter
-    ? allFiles.filter(buildFilter(options.filter))
+    ? filterScenarioFiles(allFiles, options.filter)
     : allFiles;
 
   if (options.filter) {

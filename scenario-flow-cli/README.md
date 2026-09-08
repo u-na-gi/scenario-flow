@@ -40,13 +40,13 @@ file list is sorted by path, so execution order is deterministic.
 
 ### Options
 
-| Option                  | Description                                                                                                                                                                                   |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-h, --help`            | Show help and exit with 0.                                                                                                                                                                    |
-| `-c, --concurrency <n>` | Run up to `n` scenario files in parallel (default: `1`, sequential). With `n > 1`, each file's stdout/stderr is buffered and printed as one block when that file finishes, so logs never mix. |
-| `--filter <pattern>`    | Only run files whose (absolute) path contains `pattern`. Use `/regex/` or `/regex/i` for a regular-expression match. Only one `--filter` is honoured.                                         |
-| `--base-url <url>`      | Pass `SF_API_BASE_URL=<url>` to every scenario process, which overrides the scenario's `apiBaseUrl`. Setting `SF_API_BASE_URL` in the environment before running `sfcli` works too.           |
-| `--allow-empty`         | Exit with 0 even when no `.sf.ts` files are found.                                                                                                                                            |
+| Option                  | Description                                                                                                                                                                                                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-h, --help`            | Show help and exit with 0.                                                                                                                                                                                                                                                    |
+| `-c, --concurrency <n>` | Run up to `n` scenario files in parallel (default: `1`, sequential). With `n > 1`, each file's stdout/stderr is buffered and printed as one block when that file finishes, so logs never mix. Blocks of passed files are written to stdout, blocks of failed files to stderr. |
+| `--filter <pattern>`    | Only run files whose path, relative to the current directory, contains `pattern`. Use `/regex/` or `/regex/i` for a regular-expression match. Only one `--filter` is honoured.                                                                                                |
+| `--base-url <url>`      | Pass `SF_API_BASE_URL=<url>` to every scenario process, which overrides the scenario's `apiBaseUrl`. Setting `SF_API_BASE_URL` in the environment before running `sfcli` works too.                                                                                           |
+| `--allow-empty`         | Exit with 0 even when no `.sf.ts` files are found.                                                                                                                                                                                                                            |
 
 ### Exit code
 
@@ -78,7 +78,9 @@ sfcli --filter login ./scenarios
 sfcli --filter '/user|auth/i' ./scenarios
 
 # Run four files at a time; output of each file is printed as one block
+# (passed files on stdout, failed files on stderr)
 sfcli -c 4 ./scenarios
+sfcli -c 4 ./scenarios 2>failures.log   # keep only failure traces
 
 # Point every scenario at another server
 sfcli --base-url http://localhost:8080/ ./scenarios
