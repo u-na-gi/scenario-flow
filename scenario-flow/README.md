@@ -291,12 +291,18 @@ synthetic step named `once: <parent name>`:
   against the child's context (each reported as an info line, e.g.
   `"Login" > Authenticate`, inside the `once: Login` step block). A shallow
   snapshot of the values those steps wrote is cached on the parent instance.
+- "Wrote" means: keys passed to `setContext` / `addContext` / `merge` during the
+  run (a write of the same value counts), plus keys whose value changed. Values
+  are not cloned. Mutating an object the child already held **in place**
+  (`ctx.getContext("user").name = "x"`) is not detected and does not reach the
+  other children.
 - Every later run — by another child, or by `execute()` on the parent itself —
   merges that snapshot into the context and logs
   `"Login" already ran (cached, skipped)`.
 - Children that reach the step while the first run is still in flight (e.g.
-  `Promise.all` over several scenarios) wait for it and share its result; the
-  parent never runs twice in one process.
+  `Promise.all` over several scenarios) wait for it and share its result,
+  logging `"Login" waited for in-flight run (shared, skipped)`; the parent never
+  runs twice in one process.
 - A failing run is not cached: the error propagates, and the next child runs the
   parent's steps again.
 - Nesting composes: with `register.once()` inherited by `login`, `login`'s step

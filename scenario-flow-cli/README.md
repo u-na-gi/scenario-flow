@@ -111,7 +111,20 @@ them. `--setup <file>` runs one file first and shares its context with the rest:
    `--allow-read=<tmp>`); every top-level `ScenarioFlow` in them starts with the
    values from that file in its context. `--concurrency`, `--filter` and
    `--base-url` apply as usual.
-4. The temporary file is deleted, also when a step fails.
+4. The temporary file is deleted, also when a step fails or the run is
+   interrupted with Ctrl+C (exit code 130).
+
+`sfcli` itself needs write access to the OS temp directory for that file. The
+default install (`deno task install`) grants only `--allow-read --allow-run`: an
+interactive run then prompts once for exactly that directory, while a
+non-interactive run (CI, `--no-prompt`) prints a clear error and exits with `1`.
+To avoid the prompt, pass the directory explicitly and nothing more:
+
+```bash
+deno install --global --allow-read --allow-run --allow-write=/tmp -n sfcli main.ts
+# or for one run
+deno run --allow-read --allow-run --allow-write="$TMPDIR" main.ts --setup setup.sf.ts ./scenarios
+```
 
 Only JSON-serializable context values (strings, numbers, booleans, arrays, plain
 objects, ...) are carried over; functions, `Response` objects and the like are
@@ -167,5 +180,6 @@ deno task dev
 - Network access for executing ScenarioFlow files
 - Read permissions for file system scanning
 - Run permissions for executing Deno commands
-- Write permissions for the temporary context file of `--setup`
-  (`deno task install` grants `--allow-read --allow-run --allow-write`)
+- Write permission for the OS temp directory when using `--setup`
+  (`--allow-write=/tmp`; see
+  [Running a setup file once](#running-a-setup-file-once))

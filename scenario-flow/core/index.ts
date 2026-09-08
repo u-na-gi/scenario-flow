@@ -103,16 +103,43 @@ export type { ScenarioFlowStepFunction } from "./type.ts";
 
 /**
  * Merge a plain record into a context (shallow; the record's values win),
- * with the same semantics as `ctx.merge(otherCtx)`.
+ * with the same semantics as `ctx.merge(otherCtx)`. Goes through
+ * `setContext` so that a write-recording proxy (see {@link recordWrites})
+ * sees the keys.
  */
 function mergeRecord<Ctx extends object>(
   ctx: ScenarioFlowContext<Ctx>,
   record: ContextRecord,
 ): void {
-  ctx.customContext = {
-    ...(ctx.customContext as ContextRecord),
-    ...record,
-  } as Partial<Ctx>;
+  for (const [key, value] of Object.entries(record)) {
+    ctx.setContext(key as never, value as never);
+  }
+}
+
+/**
+ * Wrap a context so that every key written through `setContext`,
+ * `addContext` or `merge` is added to `written`. All other members are
+ * forwarded to `ctx` unchanged (the proxy shares its `customContext`).
+ */
+function recordWrites<Ctx extends object>(
+  ctx: ScenarioFlowContext<Ctx>,
+  written: Set<string>,
+): ScenarioFlowContext<Ctx> {
+  const setContext = (key: string, value: unknown) => {
+    written.add(key);
+    ctx.setContext(key as never, value as never);
+  };
+  const merge = (other: ScenarioFlowContext<object>) => {
+    for (const key of Object.keys(other.customContext)) written.add(key);
+    ctx.merge(other);
+  };
+  return new Proxy(ctx, {
+    get(target, prop, receiver) {
+      if (prop === "setContext" || prop === "addContext") return setContext;
+      if (prop === "merge") return merge;
+      return Reflect.get(target, prop, receiver);
+    },
+  });
 }
 
 /**
@@ -158,6 +185,8 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
    * run fails so that the next child retries.
    */
   private onceResult?: Promise<ContextRecord>;
+  /** `true` once {@link ScenarioFlow.onceResult} has resolved. */
+  private onceDone = false;
   /**
    * Type-level marker carrying `Ctx` contravariantly; never assigned at run
    * time (see {@link ScenarioFlowChain.__ctx}).
@@ -229,7 +258,12 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     );
   }
 
-  private createFetcher() {
+  /**
+   * Build the `ctx.fetcher` function bound to this scenario's config: it
+   * joins `path` with `apiBaseUrl`, logs request and response, and enforces
+   * `expectStatus` / `throwOnError`.
+   */
+  private createFetcher(): (req: ScenarioFlowRequest) => Promise<Response> {
     return async (req: ScenarioFlowRequest): Promise<Response> => {
       // Strip scenario-flow-only options so only RequestInit reaches fetch()
       const { path, expectStatus, throwOnError = true, ...init } = req;
@@ -286,6 +320,10 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     };
   }
 
+  /**
+   * Join a request path with `apiBaseUrl`, collapsing the slashes between
+   * them.
+   */
   private joinUrl(parts: string): string {
     const clean = [this.config.apiBaseUrl, parts].map((p) =>
       p.replace(/^\/+|\/+$/g, "")
@@ -342,9 +380,15 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
    * itself), only merges a shallow snapshot of the values those steps wrote
    * into the child's context and logs `(cached, skipped)`.
    *
+   * - The snapshot contains the keys the parent's steps wrote through
+   *   `setContext` / `addContext` / `merge` (same-value writes included) and
+   *   keys whose value changed during the run. Mutating an object the child
+   *   already held in place (`ctx.getContext("user").name = "x"`) is not
+   *   detected and is not carried to other children.
    * - Children that reach the step while the first run is still in flight
-   *   wait for it and then merge the same snapshot (the run is never
-   *   duplicated in one process).
+   *   wait for it and then merge the same snapshot, logging
+   *   `waited for in-flight run` (the run is never duplicated in one
+   *   process).
    * - A failing run is not cached: the error is rethrown and the next child
    *   runs the parent's steps again.
    * - The cache is per parent instance and per process. Separate `deno run`
@@ -411,20 +455,31 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     nested: boolean,
   ): Promise<void> {
     if (this.onceResult) {
+      const waited = !this.onceDone;
       const snapshot = await this.onceResult;
       mergeRecord(ctx, snapshot);
-      logger.logInfo(`"${this.scenarioName}" already ran (cached, skipped)`);
+      logger.logInfo(
+        waited
+          ? `"${this.scenarioName}" waited for in-flight run (shared, skipped)`
+          : `"${this.scenarioName}" already ran (cached, skipped)`,
+      );
       return;
     }
 
     const inFlight = (async () => {
+      // Keep only what the parent's steps wrote, so values a child already
+      // held before the parent ran do not leak into its siblings. Writes
+      // through setContext/addContext/merge are recorded explicitly (this
+      // catches same-value writes); a value diff on top catches direct
+      // assignments to ctx.customContext. In-place mutation of an object the
+      // child inherited is not detected.
+      const written = new Set<string>();
       const before = { ...(ctx.customContext as ContextRecord) };
-      await this.runStepsInto(ctx, nested);
-      // Keep only what the steps wrote, so values a child already held
-      // before the parent ran do not leak into its siblings.
+      await this.runStepsInto(recordWrites(ctx, written), nested);
+      const after = ctx.customContext as ContextRecord;
       const snapshot: ContextRecord = {};
-      for (const [key, value] of Object.entries(ctx.customContext)) {
-        if (!(key in before) || before[key] !== value) {
+      for (const [key, value] of Object.entries(after)) {
+        if (written.has(key) || !(key in before) || before[key] !== value) {
           snapshot[key] = value;
         }
       }
@@ -434,6 +489,7 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
 
     try {
       await inFlight;
+      this.onceDone = true;
     } catch (error) {
       if (this.onceResult === inFlight) {
         this.onceResult = undefined;
@@ -501,6 +557,10 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     );
   }
 
+  /**
+   * Run the scenario inside a scenario log block (`startScenario` /
+   * `endScenario`). Errors propagate to {@link ScenarioFlow.execute}.
+   */
   private async run(): Promise<void> {
     logger.startScenario(this.scenarioName);
 

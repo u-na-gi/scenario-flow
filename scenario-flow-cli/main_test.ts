@@ -30,20 +30,16 @@ interface CliRun {
 
 /**
  * Runs the CLI (main.ts) as a subprocess and returns exit code and output.
+ * The CLI gets `--allow-read --allow-run` plus `--allow-write` for the
+ * `--setup` temp file (stdio is piped, so a missing permission never prompts).
  */
 async function runCli(
   args: string[],
   env: Record<string, string> = {},
+  denoFlags: string[] = ["--allow-read", "--allow-run", "--allow-write"],
 ): Promise<CliRun> {
   const process = new Deno.Command("deno", {
-    args: [
-      "run",
-      "--allow-read",
-      "--allow-run",
-      "--allow-write",
-      "main.ts",
-      ...args,
-    ],
+    args: ["run", ...denoFlags, "main.ts", ...args],
     cwd: Deno.cwd(),
     env,
     stdout: "piped",
@@ -367,6 +363,32 @@ Deno.test("CLI --setup rejects a missing or non-.sf.ts file", async () => {
   ]);
   assertEquals(notScenario.code, 1);
   assertEquals(notScenario.stderr.includes("--setup"), true);
+});
+
+Deno.test("CLI --setup without write permission fails with a clear error before running anything", async () => {
+  const { code, stdout, stderr } = await runCli(
+    ["--setup", join(SETUP, "setup.sf.ts"), join(SETUP, "use-context.sf.ts")],
+    {},
+    ["--allow-read", "--allow-run", "--no-prompt"],
+  );
+  assertEquals(code, 1);
+  assertEquals(stderr.includes("--setup needs write access"), true);
+  assertEquals(stderr.includes("--allow-write="), true);
+  assertEquals(stdout.includes("setup-scenario-ran"), false);
+  assertEquals(stdout.includes("USE_CONTEXT"), false);
+});
+
+Deno.test("CLI --filter summary excludes the setup file from the denominator", async () => {
+  // SETUP holds setup.sf.ts and use-context.sf.ts; only the latter counts
+  const { code, stdout } = await runCli([
+    "--setup",
+    join(SETUP, "setup.sf.ts"),
+    "--filter",
+    "use-context",
+    SETUP,
+  ]);
+  assertEquals(code, 0, stdout);
+  assertEquals(stdout.includes("matched 1/1 files"), true);
 });
 
 Deno.test("CLI without --setup: the scenario that needs the context fails", async () => {

@@ -61,7 +61,7 @@ jobs:
       - name: Run scenario-flow-cli tests
         run: |
           cd scenario-flow-cli
-          deno test --allow-read --allow-run --allow-net --allow-write
+          deno test --allow-read --allow-run --allow-net
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

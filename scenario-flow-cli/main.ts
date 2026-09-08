@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-run --allow-write
+#!/usr/bin/env -S deno run --allow-read --allow-run
 
 import { relative, resolve } from "@std/path";
 import { walk } from "@std/fs";
@@ -73,6 +73,9 @@ OPTIONS:
                            sfcli exits with 1. The setup file is excluded from
                            the regular run when it is also under PATH.
                            Only JSON-serializable context values are carried.
+                           sfcli itself needs write access to the OS temp
+                           directory for this (--allow-write=/tmp or $TMPDIR;
+                           an interactive run prompts for exactly that path).
       --allow-empty        Exit with 0 even when no .sf.ts files are found.
 
 EXIT CODE:
@@ -404,13 +407,14 @@ export async function main(args: string[] = Deno.args): Promise<number> {
     setupFile = setup.files[0];
   }
 
-  const scenarioFiles =
-    (options.filter ? filterScenarioFiles(allFiles, options.filter) : allFiles)
-      .filter((file) => file !== setupFile);
+  const candidates = allFiles.filter((file) => file !== setupFile);
+  const scenarioFiles = options.filter
+    ? filterScenarioFiles(candidates, options.filter)
+    : candidates;
 
   if (options.filter) {
     console.log(
-      `🔎 Filter "${options.filter}" matched ${scenarioFiles.length}/${allFiles.length} files`,
+      `🔎 Filter "${options.filter}" matched ${scenarioFiles.length}/${candidates.length} files`,
     );
   }
 
@@ -442,12 +446,30 @@ export async function main(args: string[] = Deno.args): Promise<number> {
   // context. Child processes only get file permissions for that one file.
   let contextFile: string | undefined;
   let scenarioArgs: string[] = [];
+  let sigintListener: (() => void) | undefined;
   try {
     if (setupFile) {
-      contextFile = await Deno.makeTempFile({
-        prefix: "sfcli-context-",
-        suffix: ".json",
-      });
+      contextFile = await createContextFile();
+      if (contextFile === undefined) {
+        return 1;
+      }
+      // Remove the temp file when the run is interrupted (Ctrl+C); the
+      // `finally` below does not run in that case.
+      const tempFile = contextFile;
+      sigintListener = () => {
+        try {
+          Deno.removeSync(tempFile);
+        } catch {
+          // Already gone; nothing else to clean up.
+        }
+        Deno.exit(130);
+      };
+      try {
+        Deno.addSignalListener("SIGINT", sigintListener);
+      } catch {
+        // Signal listeners are not supported on this platform.
+        sigintListener = undefined;
+      }
       console.log(`🧰 Setup: ${setupFile}`);
       console.log(`   context file: ${contextFile}`);
       const setupResult = await executeScenarioFile(setupFile, {
@@ -501,6 +523,13 @@ export async function main(args: string[] = Deno.args): Promise<number> {
 
     return failed.length === 0 && errors.length === 0 ? 0 : 1;
   } finally {
+    if (sigintListener) {
+      try {
+        Deno.removeSignalListener("SIGINT", sigintListener);
+      } catch {
+        // Not supported on this platform; it was never added.
+      }
+    }
     if (contextFile) {
       try {
         await Deno.remove(contextFile);
@@ -508,6 +537,32 @@ export async function main(args: string[] = Deno.args): Promise<number> {
         // Already gone or not removable; nothing else to clean up.
       }
     }
+  }
+}
+
+/**
+ * Creates the temporary context file for `--setup` in the OS temp directory.
+ * Deno checks write permission for that directory only, so an interactive
+ * run prompts for exactly that path. Returns `undefined` (after printing a
+ * clear error) when the permission is missing or the file cannot be created.
+ */
+async function createContextFile(): Promise<string | undefined> {
+  try {
+    return await Deno.makeTempFile({
+      prefix: "sfcli-context-",
+      suffix: ".json",
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof Deno.errors.NotCapable) {
+      console.error(
+        `❌ --setup needs write access to the temp directory for its context file: ${message}\n` +
+          `   Run sfcli with --allow-write=<temp dir> (e.g. --allow-write=/tmp or "$TMPDIR").`,
+      );
+    } else {
+      console.error(`❌ --setup: cannot create the context file: ${message}`);
+    }
+    return undefined;
   }
 }
 

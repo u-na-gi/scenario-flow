@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { ScenarioFlow } from "../index.ts";
 import type { ScenarioFlowConfig } from "../type.ts";
+import type { ScenarioFlowContext } from "../context.ts";
 import {
   CONTEXT_FILE_ENV_KEY,
   CONTEXT_OUT_ENV_KEY,
@@ -154,7 +155,7 @@ Deno.test("once - concurrent children share the in-flight run", async () => {
     })
   );
 
-  await captureLog(async () => {
+  const lines = await captureLog(async () => {
     const all = Promise.all(children.map((c) => c.execute()));
     // Let every child reach the once step before the first run completes
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -164,6 +165,113 @@ Deno.test("once - concurrent children share the in-flight run", async () => {
 
   assertEquals(runs, 1);
   assertEquals(values, ["shared", "shared", "shared"]);
+  // The two waiters report that they waited, not that the run was cached
+  assertEquals(
+    lines.filter((l) => l.includes("waited for in-flight run")).length,
+    2,
+  );
+  assertEquals(
+    lines.filter((l) => l.includes("already ran (cached, skipped)")).length,
+    0,
+  );
+});
+
+Deno.test("once - same-value writes and merge() are part of the snapshot", async () => {
+  type Ctx = { same: string; merged: string; untouched: string };
+
+  const source = new ScenarioFlow<{ merged: string }>("Source", config);
+  const parent = new ScenarioFlow<Ctx>("Parent", config)
+    .step("write", async (ctx) => {
+      await Promise.resolve();
+      // Same value the child already holds: a value diff alone misses it
+      ctx.setContext("same", "seed");
+      // Keys merged from another context count as writes too
+      source.step("noop", async (src) => {
+        await Promise.resolve();
+        src.setContext("merged", "via merge");
+      });
+      await source.execute();
+      ctx.merge(sourceCtx(source));
+    })
+    .once();
+
+  // A seeds "same" and "untouched" *before* the once step runs; only "same"
+  // is written by the parent, so only "same" may reach B.
+  const seeded = new ScenarioFlow<Ctx>("Seeded", config).step(
+    "seed",
+    async (ctx) => {
+      await Promise.resolve();
+      ctx.setContext("same", "seed");
+      ctx.setContext("untouched", "seed");
+    },
+  );
+  const a = new ScenarioFlow("A", config).step(seeded).step(parent);
+
+  const seen: Record<string, string | undefined> = {};
+  const b = new ScenarioFlow("B", config).step(parent).step(
+    "read",
+    async (ctx) => {
+      await Promise.resolve();
+      seen.same = ctx.getContext<string>("same");
+      seen.merged = ctx.getContext<string>("merged");
+      seen.untouched = ctx.getContext<string>("untouched");
+    },
+  );
+
+  await captureLog(async () => {
+    await a.execute();
+    await b.execute();
+  });
+
+  assertEquals(seen, {
+    same: "seed",
+    merged: "via merge",
+    untouched: undefined,
+  });
+});
+
+/** The private ctx of a scenario, for merge() in tests. */
+function sourceCtx<Ctx extends object>(
+  flow: ScenarioFlow<Ctx>,
+): ScenarioFlowContext<Ctx> {
+  return (flow as unknown as { ctx: ScenarioFlowContext<Ctx> }).ctx;
+}
+
+Deno.test("once - in-place mutation of an inherited object is not carried over", async () => {
+  type Ctx = { user: { name: string } };
+  const parent = new ScenarioFlow<Ctx>("Parent", config)
+    .step("mutate", async (ctx) => {
+      await Promise.resolve();
+      ctx.getContext("user")!.name = "mutated";
+    })
+    .once();
+
+  const seeded = new ScenarioFlow<Ctx>("Seeded", config).step(
+    "seed",
+    async (ctx) => {
+      await Promise.resolve();
+      ctx.setContext("user", { name: "seed" });
+    },
+  );
+  const a = new ScenarioFlow("A", config).step(seeded).step(parent);
+
+  let userSeenByB: unknown = "not run";
+  const b = new ScenarioFlow("B", config).step(parent).step(
+    "read",
+    async (ctx) => {
+      await Promise.resolve();
+      userSeenByB = ctx.getContext("user");
+    },
+  );
+
+  await captureLog(async () => {
+    await a.execute();
+    await b.execute();
+  });
+
+  // Documented limitation: the mutated object was never written via
+  // setContext and its reference did not change, so B does not get it.
+  assertEquals(userSeenByB, undefined);
 });
 
 Deno.test("once - nested run-once chains compose", async () => {
