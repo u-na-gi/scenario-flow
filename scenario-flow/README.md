@@ -302,7 +302,8 @@ await scenario
     try {
       await ctx.fetcher({ path: "/invalid-endpoint" });
     } catch (error) {
-      console.log("Caught expected error:", error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      console.log("Caught expected error:", message);
     }
   })
   .execute();
