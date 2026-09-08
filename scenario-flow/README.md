@@ -114,17 +114,28 @@ const getData = login.extend<GetDataCtx>("Get data")
 await getData.execute();
 ```
 
+When the context type is declared explicitly
+(`new ScenarioFlow<Ctx>("child", parent)`), `Ctx` must extend the parent's
+context type: `ParentCtx & Own` and `ParentCtx` are accepted, a conflicting,
+unrelated or narrower `Ctx` is a compile error, and an untyped parent accepts
+any `Ctx`.
+
 **Inheriting copies the context; it is never shared.** A child scenario gets its
-own context object (seeded with a shallow copy of the values the parent holds at
-construction time) and its own copy of the config. The parent's steps run again
-inside the child's `execute()` against the child's context, so two children of
+own context object and its own copy of the config. The copy is a **shallow
+snapshot taken at construction**: top-level values the parent holds at that
+moment are copied, but nested objects are not cloned, so a nested object stored
+by the parent is shared between the parent and all of its children (values are
+not deep-cloned because they may not be cloneable). The parent's steps run again
+inside each child's `execute()` against that child's context, so two children of
 the same parent (e.g. many scenarios built on `login`) never see each other's
-values, and children never write into the parent's context.
+top-level values, and children never write into the parent's context.
 
 An untyped scenario (no type argument) behaves like `Record<string, unknown>`:
 any key is allowed, `getContext(key)` returns `unknown` and `getContext<T>(key)`
 returns `T | undefined`. Combining a typed and an untyped scenario keeps the
-typed side (`InheritedContext<Parent, Own>`).
+typed side (`InheritedContext<Parent, Own>`). For gradual migration, an untyped
+`ScenarioFlowStepFunction` is still accepted by `.step()` on a typed chain; such
+a step does not get key checking.
 
 ## API Reference
 

@@ -2,6 +2,7 @@ import {
   type ContextRecord,
   createCtx,
   type InheritedContext,
+  type IsUntypedContext,
   type ScenarioFlowContext,
 } from "./context.ts";
 import type {
@@ -50,14 +51,38 @@ export interface ScenarioFlowChain<Ctx extends object = ContextRecord> {
    * @returns Promise that resolves when all steps complete
    */
   execute(): Promise<void>;
+  /**
+   * Type-level marker carrying `Ctx` contravariantly; never assigned at run
+   * time. It lets `new ScenarioFlow<Ctx>(name, parent)` check that the
+   * declared `Ctx` extends the parent's context type.
+   * @internal
+   */
+  readonly __ctx: (ctx: ContextMarkerArg<Ctx>) => void;
 }
 
 /**
- * Minimal shape accepted as a parent scenario when the context type is given
- * explicitly (`new ScenarioFlow<Own>(name, parent)`). Every
- * {@link ScenarioFlowChain} satisfies it regardless of its context type.
+ * Parameter type of the contravariant context marker (`__ctx`) on a scenario
+ * chain; the marker is never called at run time. For an untyped context this
+ * is `object`, so an untyped parent accepts any declared `Ctx` (including
+ * interfaces). Kept as a parameter-only alias on purpose: aliasing the whole
+ * function type makes TypeScript measure its variance incorrectly.
  */
-export type ScenarioFlowParent = Pick<ScenarioFlowChain, "execute">;
+export type ContextMarkerArg<Ctx extends object> = IsUntypedContext<Ctx> extends
+  true ? object
+  : Ctx;
+
+/**
+ * Shape accepted as a parent scenario when the context type is given
+ * explicitly (`new ScenarioFlow<Ctx>(name, parent)`). A
+ * {@link ScenarioFlowChain}`<P>` satisfies `ScenarioFlowParent<Ctx>` when
+ * `Ctx` extends `P` (e.g. `Ctx = P & Own`), or when `P` is untyped.
+ */
+export type ScenarioFlowParent<Ctx extends object = ContextRecord> = {
+  /** Execute all steps in the scenario. */
+  execute(): Promise<void>;
+  /** Contravariant context marker, see {@link ScenarioFlowChain.__ctx}. */
+  readonly __ctx: (ctx: ContextMarkerArg<Ctx>) => void;
+};
 
 // Re-export the type from type.ts
 /** Function type for scenario steps */
@@ -97,6 +122,12 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
   private config: ScenarioFlowConfig;
   private ctx: ScenarioFlowContext<Ctx>;
   private steps: NamedStep<Ctx>[] = [];
+  /**
+   * Type-level marker carrying `Ctx` contravariantly; never assigned at run
+   * time (see {@link ScenarioFlowChain.__ctx}).
+   * @internal
+   */
+  declare readonly __ctx: (ctx: ContextMarkerArg<Ctx>) => void;
 
   /**
    * Create a new scenario with configuration.
@@ -115,13 +146,16 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
   /**
    * Create a new scenario by chaining another scenario, declaring the context
    * type explicitly: `new ScenarioFlow<ParentCtx & Own>(name, parent)`.
-   * The declared `Ctx` is trusted as-is; the parent's context type is not
-   * checked against it.
+   * The declared `Ctx` must extend the parent's context type (a conflicting or
+   * unrelated `Ctx` is a compile error); an untyped parent accepts any `Ctx`.
    * @param name - Descriptive name for the scenario
    * @param scenarioFlowChain - Another scenario to chain
    */
-  constructor(name: string, scenarioFlowChain: ScenarioFlowParent);
-  constructor(name: string, arg: ScenarioFlowConfig | ScenarioFlowParent) {
+  constructor(name: string, scenarioFlowChain: ScenarioFlowParent<Ctx>);
+  constructor(
+    name: string,
+    arg: ScenarioFlowConfig | ScenarioFlowParent<Ctx>,
+  ) {
     this.scenarioName = name;
 
     if (typeof arg === "object" && "apiBaseUrl" in arg) {

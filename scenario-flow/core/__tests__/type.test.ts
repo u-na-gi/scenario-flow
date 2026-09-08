@@ -1,5 +1,9 @@
-import { assertEquals } from "@std/assert";
-import type { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
+import { assertEquals, assertThrows } from "@std/assert";
+import type {
+  ScenarioFlowConfig,
+  ScenarioFlowRequest,
+  ScenarioFlowStepFunction,
+} from "../type.ts";
 import { createCtx, type ScenarioFlowContext } from "../context.ts";
 import { ScenarioFlow, type ScenarioFlowChain } from "../index.ts";
 
@@ -230,12 +234,52 @@ Deno.test("Typed context - constructor inherits the parent's Ctx", () => {
 
   // Own keys can be added by spelling the intersection explicitly ...
   const explicit = new ScenarioFlow<LoginCtx & DataCtx>("explicit", login);
+  assertType<Equal<typeof explicit, ScenarioFlow<LoginCtx & DataCtx>>>();
   explicit.step("both", async (ctx) => {
     await noop();
     ctx.setContext("items", ["a"]);
     const token = ctx.getContext("token");
     assertType<Equal<typeof token, string | undefined>>();
   });
+
+  // ... but the declared Ctx must extend the parent's Ctx.
+  // @ts-expect-error conflicting value type for "token" (string in parent)
+  new ScenarioFlow<{ token: number }>("conflict", login);
+  // @ts-expect-error unrelated Ctx: parent's keys are missing
+  new ScenarioFlow<DataCtx>("unrelated", login);
+  // @ts-expect-error narrower than the parent's Ctx
+  new ScenarioFlow<LoginCtx>("narrower", explicit);
+  // (a bare `{ execute }` object is covered by the run-time test below)
+
+  // An untyped parent accepts any declared Ctx (interface or type alias)
+  const untyped = new ScenarioFlow("untyped", config);
+  const fromUntyped = new ScenarioFlow<LoginCtx>("typed child", untyped);
+  assertType<Equal<typeof fromUntyped, ScenarioFlow<LoginCtx>>>();
+});
+
+Deno.test("Typed context - a bare object is rejected at run time too", () => {
+  assertThrows(
+    () => {
+      // @ts-expect-error a bare object is not a scenario chain
+      new ScenarioFlow<LoginCtx>("bare", { execute: noop });
+    },
+    Error,
+    "Invalid argument: ScenarioFlow constructor expects ScenarioFlowConfig or ScenarioFlowChain",
+  );
+});
+
+Deno.test("Typed context - an untyped step function is accepted on a typed chain", () => {
+  // Gradual migration: existing untyped step functions keep compiling, but
+  // they do not get key checking.
+  const legacyStep: ScenarioFlowStepFunction = async (ctx) => {
+    await noop();
+    ctx.setContext("anything", 1);
+  };
+  const chain = new ScenarioFlow<LoginCtx>("typed", config).step(
+    "legacy",
+    legacyStep,
+  );
+  assertType<Equal<typeof chain, ScenarioFlowChain<LoginCtx>>>();
 });
 
 Deno.test("Typed context - extend() yields Parent & Own", () => {

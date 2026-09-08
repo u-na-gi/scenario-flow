@@ -103,10 +103,11 @@ if (import.meta.main) {
 }
 ```
 
-A child scenario gets its own copy of the parent's context (and config); the
-parent's steps run inside the child's `execute()` against the child's context.
-Scenarios that share a parent never leak values into each other or into the
-parent.
+A child scenario gets its own copy of the parent's context (and config): a
+shallow snapshot taken at construction, so top-level values are copied but
+nested objects are shared. The parent's steps run again inside each child's
+`execute()` against that child's context. Scenarios that share a parent never
+leak top-level values into each other or into the parent.
 
 Without a type argument the context is untyped: any key is accepted and
 `ctx.getContext<T>(key)` returns `T | undefined`. See

@@ -7,10 +7,12 @@ import type { ScenarioFlowConfig, ScenarioFlowRequest } from "./type.ts";
 export type ContextRecord = Record<string, unknown>;
 
 /**
- * `true` when `Ctx` is an untyped context (has a string index signature),
- * `false` when the keys are declared explicitly.
+ * `true` when `Ctx` is an untyped context (has a string index signature, like
+ * the default `Record<string, unknown>`), `false` when the keys are declared
+ * explicitly. Building block for {@link ContextKey}, {@link TypedContextKey}
+ * and {@link InheritedContext}.
  */
-type IsUntypedContext<Ctx> = string extends keyof Ctx ? true : false;
+export type IsUntypedContext<Ctx> = string extends keyof Ctx ? true : false;
 
 /**
  * Keys accepted by `setContext` / `getContext`.
@@ -87,7 +89,12 @@ export interface ScenarioFlowContext<Ctx extends object = ContextRecord> {
    */
   getContext<T = unknown>(key: ContextKey<Ctx>): T | undefined;
   /**
-   * Merge another context into this one (shallow copy of its values).
+   * Merge another context's values into this one.
+   *
+   * This is a **shallow snapshot**: top-level keys are copied (the other
+   * context's values win on conflicts), but nested objects are not cloned, so
+   * a nested object stored in `ctx` is afterwards shared by both contexts.
+   * Values are deliberately not deep-cloned because they may not be cloneable.
    * @param ctx - Context to merge
    */
   merge<Other extends object>(ctx: ScenarioFlowContext<Other>): void;
