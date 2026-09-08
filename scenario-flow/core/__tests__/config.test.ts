@@ -240,19 +240,53 @@ Deno.test("ScenarioFlow - inherited config is already resolved (no double resolu
   });
 });
 
-Deno.test("createCtx - accepts config forms and getConfig returns resolved string", async () => {
-  await withEnv({ [ENV]: undefined }, () => {
+Deno.test("createCtx - stores the resolved config as-is (no re-resolution)", async () => {
+  await withEnv({ [ENV]: "https://env.example.com" }, () => {
     const fetcher = () => Promise.resolve(new Response("ok"));
+    // createCtx takes an already resolved config and must not consult env again
     const ctx = createCtx(fetcher, {
-      apiBaseUrl: () => "https://ctx.example.com",
+      apiBaseUrl: "https://resolved.example.com",
     });
-    assertEquals(ctx.getConfig().apiBaseUrl, "https://ctx.example.com");
-    // already resolved configs pass through unchanged
-    const ctx2 = createCtx(fetcher, {
-      apiBaseUrl: "https://plain.example.com",
+    assertEquals(ctx.getConfig(), {
+      apiBaseUrl: "https://resolved.example.com",
     });
-    assertEquals(ctx2.getConfig(), { apiBaseUrl: "https://plain.example.com" });
   });
+});
+
+Deno.test("ScenarioFlow - custom envKey wins over SF_API_BASE_URL for getConfig and the request URL", async () => {
+  const requests: string[] = [];
+  const server = Deno.serve(
+    { port: 0, hostname: "127.0.0.1", onListen: () => {} },
+    (req) => {
+      requests.push(req.url);
+      return new Response("ok");
+    },
+  );
+  const customUrl = `http://127.0.0.1:${server.addr.port}`;
+
+  try {
+    await withEnv(
+      { [ENV]: "http://sf-env.invalid", MY_API_URL: customUrl },
+      async () => {
+        const flow = new ScenarioFlow("custom-env-key", {
+          apiBaseUrl: {
+            default: "http://default.invalid",
+            envKey: "MY_API_URL",
+          },
+        });
+        let seen: string | undefined;
+        flow.step("ping", async (ctx) => {
+          seen = ctx.getConfig().apiBaseUrl;
+          await ctx.fetcher({ path: "/ping" });
+        });
+        await flow.execute();
+        assertEquals(seen, customUrl);
+        assertEquals(requests, [`${customUrl}/ping`]);
+      },
+    );
+  } finally {
+    await server.shutdown();
+  }
 });
 
 Deno.test("Integration - request goes to SF_API_BASE_URL instead of configured apiBaseUrl", async () => {

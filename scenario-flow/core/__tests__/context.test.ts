@@ -1,9 +1,12 @@
 import { assertEquals } from "@std/assert";
 import { createCtx } from "../context.ts";
-import type { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
+import type {
+  ResolvedScenarioFlowConfig,
+  ScenarioFlowRequest,
+} from "../type.ts";
 
 Deno.test("ScenarioFlowContext - createCtx creates context correctly", () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 
@@ -23,7 +26,7 @@ Deno.test("ScenarioFlowContext - createCtx creates context correctly", () => {
 });
 
 Deno.test("ScenarioFlowContext - getConfig returns correct config", () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 
@@ -40,7 +43,7 @@ Deno.test("ScenarioFlowContext - getConfig returns correct config", () => {
 });
 
 Deno.test("ScenarioFlowContext - addContext and getContext work correctly", () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 
@@ -69,7 +72,7 @@ Deno.test("ScenarioFlowContext - addContext and getContext work correctly", () =
 });
 
 Deno.test("ScenarioFlowContext - getContext with generic type", () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 
@@ -94,7 +97,7 @@ Deno.test("ScenarioFlowContext - getContext with generic type", () => {
 });
 
 Deno.test("ScenarioFlowContext - merge combines contexts correctly", () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 
@@ -124,7 +127,7 @@ Deno.test("ScenarioFlowContext - merge combines contexts correctly", () => {
 });
 
 Deno.test("ScenarioFlowContext - fetcher function works", async () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 
@@ -147,7 +150,7 @@ Deno.test("ScenarioFlowContext - fetcher function works", async () => {
 });
 
 Deno.test("ScenarioFlowContext - customContext is initially empty", () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 
@@ -163,7 +166,7 @@ Deno.test("ScenarioFlowContext - customContext is initially empty", () => {
 });
 
 Deno.test("ScenarioFlowContext - context overwrite behavior", () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 

@@ -1,6 +1,10 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { ScenarioFlow, type ScenarioFlowStepFunction } from "../index.ts";
-import type { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
+import type {
+  ResolvedScenarioFlowConfig,
+  ScenarioFlowConfig,
+  ScenarioFlowRequest,
+} from "../type.ts";
 import { createCtx } from "../context.ts";
 
 Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
@@ -310,7 +314,7 @@ Deno.test("Integration - Context isolation between different ScenarioFlow instan
 });
 
 Deno.test("Integration - createCtx function with ScenarioFlow", async () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 
