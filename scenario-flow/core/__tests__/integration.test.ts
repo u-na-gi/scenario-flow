@@ -362,7 +362,23 @@ function restoreEnv(name: string, value: string | undefined): void {
   }
 }
 
-Deno.test("Integration - binary (octet-stream) response is logged as [Binary Data]", async () => {
+// These tests need a real local server and the SF_LOG_BINARY variable.
+// Deno.test permissions can only narrow the parent's permissions, so skip
+// when `deno test` was started without --allow-net / --allow-env.
+const hasBinaryLogPermissions =
+  Deno.permissions.querySync({ name: "net" }).state === "granted" &&
+  Deno.permissions.querySync({ name: "env", variable: "SF_LOG_BINARY" })
+      .state === "granted";
+const binaryLogTestOptions = {
+  permissions: { net: true, env: ["SF_LOG_BINARY"] },
+  ignore: !hasBinaryLogPermissions,
+};
+
+Deno.test({
+  name:
+    "Integration - binary (octet-stream) response is logged as [Binary Data]",
+  ...binaryLogTestOptions,
+}, async () => {
   // Protobuf-like payload with control bytes and invalid UTF-8
   const payload = new Uint8Array([
     0x0a,
@@ -384,6 +400,7 @@ Deno.test("Integration - binary (octet-stream) response is logged as [Binary Dat
   ]);
   const garbled = new TextDecoder().decode(payload);
 
+  const originalEnv = Deno.env.get("SF_LOG_BINARY");
   const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
     const url = new URL(req.url);
     if (url.pathname === "/proto") {
@@ -408,7 +425,6 @@ Deno.test("Integration - binary (octet-stream) response is logged as [Binary Dat
     });
   });
 
-  const originalEnv = Deno.env.get("SF_LOG_BINARY");
   try {
     Deno.env.delete("SF_LOG_BINARY");
     const config: ScenarioFlowConfig = {
@@ -463,11 +479,15 @@ Deno.test("Integration - binary (octet-stream) response is logged as [Binary Dat
   }
 });
 
-Deno.test("Integration - SF_LOG_BINARY=hex adds a hex dump of the first 64 bytes", async () => {
+Deno.test({
+  name: "Integration - SF_LOG_BINARY=hex adds a hex dump of the first 64 bytes",
+  ...binaryLogTestOptions,
+}, async () => {
   const payload = new Uint8Array(100).map((_, i) => (i * 7 + 3) & 0xff);
   payload[0] = 0x0a;
   payload[1] = 0x1b;
 
+  const originalEnv = Deno.env.get("SF_LOG_BINARY");
   const server = Deno.serve(
     { port: 0, onListen() {} },
     () =>
@@ -477,7 +497,6 @@ Deno.test("Integration - SF_LOG_BINARY=hex adds a hex dump of the first 64 bytes
       }),
   );
 
-  const originalEnv = Deno.env.get("SF_LOG_BINARY");
   try {
     Deno.env.set("SF_LOG_BINARY", "hex");
     const config: ScenarioFlowConfig = {

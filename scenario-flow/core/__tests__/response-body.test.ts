@@ -6,11 +6,23 @@ import {
   isBinaryContentType,
   isHexLoggingEnabled,
   looksBinary,
+  parseCharset,
   parseMimeType,
+  TEXT_PREVIEW_BYTES,
 } from "../response-body.ts";
 import { ScenarioLogger } from "../logger.ts";
 
 const encoder = new TextEncoder();
+
+// Deno.test permissions can only narrow the parent's permissions, so the
+// env-dependent tests are skipped when `deno test` runs without --allow-env.
+const hasEnvPermission =
+  Deno.permissions.querySync({ name: "env", variable: "SF_LOG_BINARY" })
+    .state === "granted";
+const envTestOptions = {
+  permissions: { env: ["SF_LOG_BINARY"] },
+  ignore: !hasEnvPermission,
+};
 
 /** Run `fn` with console.log captured; returns the captured lines. */
 function captureLog(fn: () => void): string[] {
@@ -36,6 +48,17 @@ Deno.test("parseMimeType - strips parameters and normalizes case", () => {
   assertEquals(parseMimeType(""), null);
   assertEquals(parseMimeType(";charset=utf-8"), null);
   assertEquals(parseMimeType(null), null);
+});
+
+Deno.test("parseCharset - extracts the charset parameter", () => {
+  assertEquals(parseCharset("text/plain; charset=Shift_JIS"), "shift_jis");
+  assertEquals(parseCharset('text/html;charset="UTF-8"'), "utf-8");
+  assertEquals(
+    parseCharset("application/json; boundary=x; charset=latin1"),
+    "latin1",
+  );
+  assertEquals(parseCharset("text/plain"), null);
+  assertEquals(parseCharset(null), null);
 });
 
 Deno.test("isBinaryContentType - binary types", () => {
@@ -156,7 +179,10 @@ Deno.test("formatHexDump - truncates to max bytes and marks the cut", () => {
   assertEquals(formatHexDump(new Uint8Array([1, 2]), 2), "01 02");
 });
 
-Deno.test("isHexLoggingEnabled - follows SF_LOG_BINARY", () => {
+Deno.test({
+  name: "isHexLoggingEnabled - follows SF_LOG_BINARY",
+  ...envTestOptions,
+}, () => {
   const original = Deno.env.get("SF_LOG_BINARY");
   try {
     Deno.env.delete("SF_LOG_BINARY");
@@ -182,6 +208,51 @@ Deno.test("describeResponseBody - text content type decodes as text", () => {
     "application/json; charset=utf-8",
   );
   assertEquals(body, { kind: "text", text: '{"ok":true}' });
+});
+
+Deno.test("describeResponseBody - honors charset for text bodies", () => {
+  // "日本語" in Shift_JIS
+  const sjis = new Uint8Array([0x93, 0xfa, 0x96, 0x7b, 0x8c, 0xea]);
+  assertEquals(describeResponseBody(sjis, "text/plain; charset=Shift_JIS"), {
+    kind: "text",
+    text: "日本語",
+  });
+  // Unknown charset label falls back to UTF-8
+  assertEquals(
+    describeResponseBody(
+      encoder.encode("日本語"),
+      "text/plain; charset=x-bogus",
+    ),
+    { kind: "text", text: "日本語" },
+  );
+});
+
+Deno.test("describeResponseBody - decodes only a preview of long text bodies", () => {
+  const long = describeResponseBody(
+    encoder.encode("a".repeat(TEXT_PREVIEW_BYTES * 2)),
+    "text/plain",
+  );
+  assertEquals(long, {
+    kind: "text",
+    text: "a".repeat(TEXT_PREVIEW_BYTES) + "...",
+  });
+
+  // Exactly the preview size is not marked as cut
+  const exact = describeResponseBody(
+    encoder.encode("a".repeat(TEXT_PREVIEW_BYTES)),
+    "text/plain",
+  );
+  assertEquals(exact, { kind: "text", text: "a".repeat(TEXT_PREVIEW_BYTES) });
+
+  // A multibyte character straddling the preview boundary is dropped, not garbled
+  const straddle = describeResponseBody(
+    encoder.encode("a".repeat(TEXT_PREVIEW_BYTES - 1) + "日" + "b".repeat(10)),
+    "application/json",
+  );
+  assertEquals(straddle, {
+    kind: "text",
+    text: "a".repeat(TEXT_PREVIEW_BYTES - 1) + "...",
+  });
 });
 
 Deno.test("describeResponseBody - empty body is empty text", () => {
@@ -246,7 +317,10 @@ Deno.test("describeResponseBody - hex option adds a hex dump", () => {
   });
 });
 
-Deno.test("describeResponseBody - hex defaults to SF_LOG_BINARY env", () => {
+Deno.test({
+  name: "describeResponseBody - hex defaults to SF_LOG_BINARY env",
+  ...envTestOptions,
+}, () => {
   const original = Deno.env.get("SF_LOG_BINARY");
   try {
     Deno.env.set("SF_LOG_BINARY", "hex");

@@ -92,6 +92,10 @@ modules.
 cd scenario-flow
 deno test
 
+# Include the tests that need a local server / SF_LOG_BINARY
+# (they are skipped without these permissions)
+deno test --allow-net --allow-read --allow-env
+
 # Run specific test file
 deno test core/__tests__/context.test.ts
 

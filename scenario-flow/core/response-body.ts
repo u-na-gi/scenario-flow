@@ -10,13 +10,16 @@ export type ContentTypeKind = "text" | "binary" | "unknown";
 
 /**
  * Structured description of a response body for logging.
- * Passed to {@link ScenarioLogger.logResponse}.
+ * Accepted by `ScenarioLogger.logResponse()` in `logger.ts`.
  */
 export type ResponseBodyLog =
   | {
     /** Body is textual and can be printed as-is. */
     kind: "text";
-    /** Decoded body text */
+    /**
+     * Decoded body text. Only the first {@link TEXT_PREVIEW_BYTES} bytes are
+     * decoded; `...` is appended when the body was cut.
+     */
     text: string;
   }
   | {
@@ -38,6 +41,9 @@ export interface DescribeResponseBodyOptions {
 
 /** Number of bytes shown by the hex dump. */
 export const HEX_DUMP_BYTES = 64;
+
+/** Number of leading bytes decoded for the text preview. */
+export const TEXT_PREVIEW_BYTES = 1024;
 
 /** Number of leading bytes inspected when sniffing a body of unknown type. */
 const SNIFF_BYTES = 512;
@@ -111,6 +117,17 @@ export function parseMimeType(contentType: string | null): string | null {
   if (!contentType) return null;
   const mime = contentType.split(";")[0].trim().toLowerCase();
   return mime === "" ? null : mime;
+}
+
+/**
+ * Extract the lower-cased `charset` parameter from a `Content-Type` header
+ * value, e.g. `"shift_jis"` for `text/plain; charset=Shift_JIS`.
+ * @returns The charset label, or `null` when absent.
+ */
+export function parseCharset(contentType: string | null): string | null {
+  if (!contentType) return null;
+  const match = /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType);
+  return match ? match[1].toLowerCase() : null;
 }
 
 /**
@@ -191,6 +208,38 @@ export function looksBinary(bytes: Uint8Array): boolean {
   }
 }
 
+/** Create a decoder for `charset`, falling back to UTF-8 on unknown labels. */
+function createTextDecoder(charset: string | null): TextDecoder {
+  if (charset) {
+    try {
+      return new TextDecoder(charset);
+    } catch {
+      // Unknown or unsupported label: fall back to UTF-8
+    }
+  }
+  return new TextDecoder();
+}
+
+/**
+ * Decode a text body for logging. Only the first {@link TEXT_PREVIEW_BYTES}
+ * bytes are decoded (the logger prints at most 300 characters); `...` is
+ * appended when the body was cut.
+ */
+function decodeTextPreview(
+  bytes: Uint8Array,
+  contentType: string | null,
+): string {
+  const decoder = createTextDecoder(parseCharset(contentType));
+  if (bytes.length <= TEXT_PREVIEW_BYTES) {
+    return decoder.decode(bytes);
+  }
+  let sample = bytes.subarray(0, TEXT_PREVIEW_BYTES);
+  if (decoder.encoding === "utf-8") {
+    sample = trimPartialUtf8Tail(sample);
+  }
+  return decoder.decode(sample) + "...";
+}
+
 /**
  * Format the leading bytes as a space-separated lower-case hex string,
  * e.g. `0a 1b ff`. Appends `...` when more bytes exist than shown.
@@ -232,10 +281,11 @@ export function isHexLoggingEnabled(): boolean {
 /**
  * Decide how a response body should be logged.
  *
- * Text bodies are decoded with `TextDecoder`; binary bodies (by
- * `Content-Type`, or by sniffing when the type is unknown) are described by
- * size and type only, plus a hex dump of the first {@link HEX_DUMP_BYTES}
- * bytes when hex logging is enabled.
+ * Text bodies are decoded with `TextDecoder` (honoring the `charset`
+ * parameter, UTF-8 by default) up to {@link TEXT_PREVIEW_BYTES} bytes; binary
+ * bodies (by `Content-Type`, or by sniffing when the type is unknown) are
+ * described by size and type only, plus a hex dump of the first
+ * {@link HEX_DUMP_BYTES} bytes when hex logging is enabled.
  *
  * @param bytes - Full response body
  * @param contentType - Value of the response `Content-Type` header
@@ -255,7 +305,7 @@ export function describeResponseBody(
     (kind === "unknown" && looksBinary(bytes));
 
   if (!binary) {
-    return { kind: "text", text: new TextDecoder().decode(bytes) };
+    return { kind: "text", text: decodeTextPreview(bytes, contentType) };
   }
 
   const hex = options.hex ?? isHexLoggingEnabled();
