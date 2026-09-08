@@ -56,7 +56,7 @@ Deno.test("ScenarioFlow - step method with function", () => {
 
   const stepFunction: ScenarioFlowStepFunction = async (ctx) => {
     await Promise.resolve(); // no-op await to keep the function async
-    ctx.addContext("test", "value");
+    ctx.setContext("test", "value");
   };
 
   const result = scenarioFlow.step("test-step", stepFunction);
@@ -73,7 +73,7 @@ Deno.test("ScenarioFlow - step method with ScenarioFlowChain", () => {
 
   const stepFunction: ScenarioFlowStepFunction = async (ctx) => {
     await Promise.resolve(); // no-op await to keep the function async
-    ctx.addContext("test", "value");
+    ctx.setContext("test", "value");
   };
 
   flow2.step("test-step", stepFunction);
@@ -98,7 +98,7 @@ Deno.test("ScenarioFlow - execute method runs steps successfully", async () => {
     const stepFunction: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // no-op await to keep the function async
       stepExecuted = true;
-      ctx.addContext("executed", true);
+      ctx.setContext("executed", true);
     };
 
     scenarioFlow.step("test-step", stepFunction);
@@ -155,19 +155,19 @@ Deno.test("ScenarioFlow - multiple steps execute in order", async () => {
     const step1: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // no-op await to keep the function async
       executionOrder.push(1);
-      ctx.addContext("step1", "executed");
+      ctx.setContext("step1", "executed");
     };
 
     const step2: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // no-op await to keep the function async
       executionOrder.push(2);
-      ctx.addContext("step2", "executed");
+      ctx.setContext("step2", "executed");
     };
 
     const step3: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // no-op await to keep the function async
       executionOrder.push(3);
-      ctx.addContext("step3", "executed");
+      ctx.setContext("step3", "executed");
     };
 
     scenarioFlow
@@ -307,12 +307,12 @@ Deno.test("ScenarioFlow - chaining ScenarioFlow copies steps", () => {
 
   const step1: ScenarioFlowStepFunction = async (ctx) => {
     await Promise.resolve(); // no-op await to keep the function async
-    ctx.addContext("step1", "executed");
+    ctx.setContext("step1", "executed");
   };
 
   const step2: ScenarioFlowStepFunction = async (ctx) => {
     await Promise.resolve(); // no-op await to keep the function async
-    ctx.addContext("step2", "executed");
+    ctx.setContext("step2", "executed");
   };
 
   flow1.step("", step1);
@@ -341,12 +341,12 @@ Deno.test("ScenarioFlow - context merging in step chaining", async () => {
 
     const step1: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // no-op await to keep the function async
-      ctx.addContext("flow1", "data");
+      ctx.setContext("flow1", "data");
     };
 
     const step2: ScenarioFlowStepFunction = async (ctx): Promise<void> => {
       await Promise.resolve(); // no-op await to keep the function async
-      ctx.addContext("flow2", "data");
+      ctx.setContext("flow2", "data");
     };
 
     flow1.step("", step1);

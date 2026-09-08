@@ -8,7 +8,8 @@ fluent API for building and executing API test scenarios.
 - 🔗 **Fluent API**: Chain multiple steps together for readable test scenarios
 - 📝 **Built-in Logging**: Automatic request/response logging with timing
 - 🔧 **Context Management**: Share data between steps with built-in context
-- 🚀 **TypeScript Support**: Full type safety with TypeScript
+- 🚀 **TypeScript Support**: Full type safety with TypeScript, including typed
+  scenario context
 - 🌐 **HTTP Client**: Built-in fetch-based HTTP client with error handling
 
 ## Installation
@@ -45,10 +46,10 @@ await scenario
     });
 
     const data = await response.json();
-    ctx.addContext("authToken", data.token);
+    ctx.setContext("authToken", data.token);
   })
   .step("Get user profile", async (ctx) => {
-    const token = ctx.getContext<string>("authToken");
+    const token = ctx.getContext<string>("authToken"); // string | undefined
 
     const response = await ctx.fetcher({
       path: "/user/profile",
@@ -63,6 +64,79 @@ await scenario
   .execute();
 ```
 
+## Typed Context
+
+Declare the shape of the context once per scenario and `setContext` /
+`getContext` become fully typed: keys are checked and `getContext` returns the
+declared value type (no `as` casts needed).
+
+```typescript
+type LoginCtx = {
+  token: string;
+  userId: number;
+};
+
+export const login = new ScenarioFlow<LoginCtx>("Login", config)
+  .step("Authenticate", async (ctx) => {
+    const res = await ctx.fetcher({ path: "/auth/login", method: "POST" });
+    const data = await res.json();
+
+    ctx.setContext("token", data.token); // value must be a string
+    ctx.setContext("userId", data.id);
+    // ctx.setContext("token", 123);     // compile error: wrong value type
+    // ctx.getContext("typo");           // compile error: unknown key
+  });
+```
+
+### Inheriting a parent scenario
+
+| Form                                                | Resulting context type            |
+| --------------------------------------------------- | --------------------------------- |
+| `new ScenarioFlow("child", login)`                  | `LoginCtx` (inferred from parent) |
+| `login.extend<Own>("child")`                        | `LoginCtx & Own`                  |
+| `new ScenarioFlow<LoginCtx & Own>("child", login)`  | `LoginCtx & Own` (as declared)    |
+| `new ScenarioFlow<Own>("main", config).step(login)` | chain typed as `Own & LoginCtx`   |
+
+```typescript
+type GetDataCtx = { items: string[] };
+
+// Parent's steps run first; the child sees the parent's keys and its own.
+const getData = login.extend<GetDataCtx>("Get data")
+  .step("Fetch", async (ctx) => {
+    const token = ctx.getContext("token"); // string | undefined
+    const res = await ctx.fetcher({
+      path: "/api/data",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    ctx.setContext("items", await res.json());
+  });
+
+await getData.execute();
+```
+
+When the context type is declared explicitly
+(`new ScenarioFlow<Ctx>("child", parent)`), `Ctx` must extend the parent's
+context type: `ParentCtx & Own` and `ParentCtx` are accepted, a conflicting,
+unrelated or narrower `Ctx` is a compile error, and an untyped parent accepts
+any `Ctx`.
+
+**Inheriting copies the context; it is never shared.** A child scenario gets its
+own context object and its own copy of the config. The copy is a **shallow
+snapshot taken at construction**: top-level values the parent holds at that
+moment are copied, but nested objects are not cloned, so a nested object stored
+by the parent is shared between the parent and all of its children (values are
+not deep-cloned because they may not be cloneable). The parent's steps run again
+inside each child's `execute()` against that child's context, so two children of
+the same parent (e.g. many scenarios built on `login`) never see each other's
+top-level values, and children never write into the parent's context.
+
+An untyped scenario (no type argument) behaves like `Record<string, unknown>`:
+any key is allowed, `getContext(key)` returns `unknown` and `getContext<T>(key)`
+returns `T | undefined`. Combining a typed and an untyped scenario keeps the
+typed side (`InheritedContext<Parent, Own>`). For gradual migration, an untyped
+`ScenarioFlowStepFunction` is still accepted by `.step()` on a typed chain; such
+a step does not get key checking.
+
 ## API Reference
 
 ### ScenarioFlow
@@ -72,22 +146,34 @@ The main class for creating and executing test scenarios.
 #### Constructor
 
 ```typescript
-new ScenarioFlow(name: string, config: ScenarioFlowConfig)
+new ScenarioFlow<Ctx = Record<string, unknown>>(name: string, config: ScenarioFlowConfig)
+new ScenarioFlow(name: string, parent: ScenarioFlowChain<Ctx>)   // Ctx inferred from parent
+new ScenarioFlow<Ctx>(name: string, parent: ScenarioFlowChain)   // Ctx as declared
 ```
 
 - `name`: A descriptive name for the scenario
 - `config`: Configuration object containing `apiBaseUrl` (a string, a
   `() => string`, or `{ default, envKey? }` — see
   [Overriding the base URL](#overriding-the-base-url))
+- `parent`: Another scenario whose steps and context are inherited
 
 #### Methods
 
-##### `.step(name: string, fn: ScenarioFlowStepFunction): ScenarioFlowChain`
+##### `.step(name: string, fn: ScenarioFlowStepFunction<Ctx>): ScenarioFlowChain<Ctx>`
 
 Add a step to the scenario.
 
 - `name`: Step name for logging
 - `fn`: Async function that receives the context
+
+##### `.step(parent: ScenarioFlowChain<Parent>): ScenarioFlowChain<Ctx & Parent>`
+
+Append another scenario's steps to this one.
+
+##### `.extend<Own>(name: string): ScenarioFlow<Ctx & Own>`
+
+Create a new scenario that inherits this scenario's steps and context and adds
+its own context keys.
 
 ##### `.execute(): Promise<void>`
 
@@ -95,13 +181,15 @@ Execute all steps in the scenario.
 
 ### Context Methods
 
-The context object passed to each step provides:
+The context object (`ScenarioFlowContext<Ctx>`) passed to each step provides:
 
 - `fetcher(request)`: Make HTTP requests
-- `addContext(key, value)`: Store data for later steps
-- `getContext<T>(key)`: Retrieve stored data
+- `setContext(key, value)`: Store data for later steps (typed by `Ctx`)
+- `getContext(key)`: Retrieve stored data as `Ctx[key] | undefined`
+- `getContext<T>(key)`: Retrieve stored data as `T | undefined`
 - `getConfig()`: Get the scenario configuration (`apiBaseUrl` is always a
   resolved `string` here)
+- `addContext(key, value)`: Deprecated alias of `setContext`
 - `assert`: Assertion helpers (see [Assertions](#assertions))
 
 ### Assertions

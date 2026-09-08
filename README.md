@@ -47,12 +47,15 @@ Create a scenario file (e.g., `login.sf.ts`):
 ```typescript
 import { ScenarioFlow } from "scenario-flow";
 
-export const login = new ScenarioFlow({
+// Declare the context shape: setContext / getContext are typed by it
+export type LoginCtx = { token: string };
+
+export const login = new ScenarioFlow<LoginCtx>("User Login", {
   apiBaseUrl: "http://localhost:3000/",
-}).step(async (ctx) => {
+}).step("Exec Login", async (ctx) => {
   const res = await ctx.fetcher({
     method: "POST",
-    urlPaths: ["login"],
+    path: "/login",
     headers: {
       "Content-Type": "application/json",
     },
@@ -65,7 +68,7 @@ export const login = new ScenarioFlow({
   if (res.ok) {
     const data = await res.json();
     console.log("Login successful:", data);
-    ctx.addContext("token", data.token);
+    ctx.setContext("token", data.token); // must be a string
   }
 });
 
@@ -73,6 +76,41 @@ if (import.meta.main) {
   await login.execute();
 }
 ```
+
+Another scenario can build on `login` (e.g. `get-data.sf.ts`):
+
+```typescript
+import { ScenarioFlow } from "scenario-flow";
+import { login } from "./login.sf.ts";
+
+// Inherits login's steps and context type; use login.extend<Own>(name)
+// to add your own context keys on top (LoginCtx & Own).
+const getData = new ScenarioFlow("Get some data", login)
+  .step("Get authorized data", async (ctx) => {
+    const token = ctx.getContext("token"); // string | undefined
+    if (!token) throw new Error("Token not found");
+
+    await ctx.fetcher({
+      method: "GET",
+      path: "/api/data",
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+  });
+
+if (import.meta.main) {
+  await getData.execute();
+}
+```
+
+A child scenario gets its own copy of the parent's context (and config): a
+shallow snapshot taken at construction, so top-level values are copied but
+nested objects are shared. The parent's steps run again inside each child's
+`execute()` against that child's context. Scenarios that share a parent never
+leak top-level values into each other or into the parent.
+
+Without a type argument the context is untyped: any key is accepted and
+`ctx.getContext<T>(key)` returns `T | undefined`. See
+[scenario-flow/README.md](./scenario-flow/README.md) for the full API.
 
 ### Using the CLI
 
@@ -151,27 +189,27 @@ See [scenario-flow-cli/README.md](scenario-flow-cli/README.md) for all options.
 ```typescript
 import { ScenarioFlow } from "scenario-flow";
 
-const apiTest = new ScenarioFlow({
+const apiTest = new ScenarioFlow("API Test", {
   apiBaseUrl: "https://api.example.com/",
 })
-  .step(async (ctx) => {
+  .step("Login", async (ctx) => {
     // First step: Login
     const loginRes = await ctx.fetcher({
       method: "POST",
-      urlPaths: ["auth", "login"],
+      path: "/auth/login",
       body: JSON.stringify({ username: "test", password: "test" }),
     });
 
     const { token } = await loginRes.json();
-    ctx.addContext("authToken", token);
+    ctx.setContext("authToken", token);
   })
-  .step(async (ctx) => {
-    // Second step: Get user data
+  .step("Get user data", async (ctx) => {
+    // Second step: Get user data (untyped context: pass the value type)
     const token = ctx.getContext<string>("authToken");
 
     const userRes = await ctx.fetcher({
       method: "GET",
-      urlPaths: ["user", "profile"],
+      path: "/user/profile",
       headers: {
         "Authorization": `Bearer ${token}`,
       },

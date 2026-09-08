@@ -69,8 +69,8 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
       const response = await ctx.fetcher(request);
       const loginData = await response.json();
 
-      ctx.addContext("authToken", loginData.token);
-      ctx.addContext("userId", loginData.userId);
+      ctx.setContext("authToken", loginData.token);
+      ctx.setContext("userId", loginData.userId);
     };
 
     // Step 2: Get user profile
@@ -90,7 +90,7 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
       const response = await ctx.fetcher(request);
       const userData = await response.json();
 
-      ctx.addContext("userProfile", userData);
+      ctx.setContext("userProfile", userData);
     };
 
     // Step 3: Get user data
@@ -109,7 +109,7 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
       const response = await ctx.fetcher(request);
       const data = await response.json();
 
-      ctx.addContext("userData", data);
+      ctx.setContext("userData", data);
     };
 
     // Chain the steps
@@ -159,8 +159,8 @@ Deno.test("Integration - ScenarioFlow chaining with context sharing", async () =
     const flow1 = new ScenarioFlow("", config);
     const step1: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
-      ctx.addContext("flow1Data", "data from flow 1");
-      ctx.addContext("shared", "original value");
+      ctx.setContext("flow1Data", "data from flow 1");
+      ctx.setContext("shared", "original value");
     };
     flow1.step("", step1);
 
@@ -168,8 +168,8 @@ Deno.test("Integration - ScenarioFlow chaining with context sharing", async () =
     const flow2 = new ScenarioFlow("", config);
     const step2: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
-      ctx.addContext("flow2Data", "data from flow 2");
-      ctx.addContext("shared", "overwritten value");
+      ctx.setContext("flow2Data", "data from flow 2");
+      ctx.setContext("shared", "overwritten value");
     };
     flow2.step("", step2);
 
@@ -184,7 +184,7 @@ Deno.test("Integration - ScenarioFlow chaining with context sharing", async () =
       const flow2Data = ctx.getContext("flow2Data");
       const sharedData = ctx.getContext("shared");
 
-      ctx.addContext("verification", {
+      ctx.setContext("verification", {
         hasFlow1Data: flow1Data === "data from flow 1",
         hasFlow2Data: flow2Data === "data from flow 2",
         sharedOverwritten: sharedData === "overwritten value",
@@ -233,7 +233,7 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
         method: "GET",
       };
       await ctx.fetcher(request);
-      ctx.addContext("step1", "completed");
+      ctx.setContext("step1", "completed");
     };
 
     const step2: ScenarioFlowStepFunction = async (ctx) => {
@@ -242,13 +242,13 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
         method: "GET",
       };
       await ctx.fetcher(request); // This will fail
-      ctx.addContext("step2", "completed");
+      ctx.setContext("step2", "completed");
     };
 
     const step3: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
       // This should not execute due to step2 failure
-      ctx.addContext("step3", "completed");
+      ctx.setContext("step3", "completed");
     };
 
     scenarioFlow
@@ -288,14 +288,14 @@ Deno.test("Integration - Context isolation between different ScenarioFlow instan
 
     const step1: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
-      ctx.addContext("flowId", "flow1");
-      ctx.addContext("data", "flow1 data");
+      ctx.setContext("flowId", "flow1");
+      ctx.setContext("data", "flow1 data");
     };
 
     const step2: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
-      ctx.addContext("flowId", "flow2");
-      ctx.addContext("data", "flow2 data");
+      ctx.setContext("flowId", "flow2");
+      ctx.setContext("data", "flow2 data");
     };
 
     flow1.step("", step1);

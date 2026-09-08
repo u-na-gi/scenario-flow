@@ -3,7 +3,7 @@ import { login } from "./login.sf.ts";
 
 const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
   .step("Search with query parameters", async (ctx) => {
-    const token = ctx.getContext<string>("token");
+    const token = ctx.getContext("token");
     if (!token) {
       throw new Error("Token not found");
     }
@@ -40,7 +40,7 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
     }
   })
   .step("Search with different parameters", async (ctx) => {
-    const token = ctx.getContext<string>("token");
+    const token = ctx.getContext("token");
     if (!token) {
       throw new Error("Token not found");
     }
@@ -70,7 +70,7 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
     }
   })
   .step("Search without query parameter", async (ctx) => {
-    const token = ctx.getContext<string>("token");
+    const token = ctx.getContext("token");
     if (!token) {
       throw new Error("Token not found");
     }
