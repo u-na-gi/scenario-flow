@@ -17,6 +17,7 @@ import { formatStatusMismatch, isExpectedStatus } from "./status.ts";
 import { describeResponseBody, type ResponseBodyLog } from "./response-body.ts";
 import { resolveConfig } from "./config.ts";
 import { isAssertionError, ScenarioAssertionError } from "./assert.ts";
+import { loadContextFixture, writeContextOut } from "./fixture.ts";
 
 /**
  * Interface for chaining scenario steps together.
@@ -51,6 +52,13 @@ export interface ScenarioFlowChain<Ctx extends object = ContextRecord> {
   extend<Own extends object = ContextRecord>(
     name: string,
   ): ScenarioFlowChain<InheritedContext<Ctx, Own>>;
+  /**
+   * Mark this scenario as run-once: its steps are executed at most once per
+   * process, no matter how many scenarios inherit it. See
+   * {@link ScenarioFlow.once} for the exact behaviour.
+   * @returns The chain for method chaining
+   */
+  once(): ScenarioFlowChain<Ctx>;
   /**
    * Execute all steps in the scenario.
    * @returns Promise that resolves when all steps complete
@@ -94,6 +102,47 @@ export type ScenarioFlowParent<Ctx extends object = ContextRecord> = {
 export type { ScenarioFlowStepFunction } from "./type.ts";
 
 /**
+ * Merge a plain record into a context (shallow; the record's values win),
+ * with the same semantics as `ctx.merge(otherCtx)`. Goes through
+ * `setContext` so that a write-recording proxy (see {@link recordWrites})
+ * sees the keys.
+ */
+function mergeRecord<Ctx extends object>(
+  ctx: ScenarioFlowContext<Ctx>,
+  record: ContextRecord,
+): void {
+  for (const [key, value] of Object.entries(record)) {
+    ctx.setContext(key as never, value as never);
+  }
+}
+
+/**
+ * Wrap a context so that every key written through `setContext`,
+ * `addContext` or `merge` is added to `written`. All other members are
+ * forwarded to `ctx` unchanged (the proxy shares its `customContext`).
+ */
+function recordWrites<Ctx extends object>(
+  ctx: ScenarioFlowContext<Ctx>,
+  written: Set<string>,
+): ScenarioFlowContext<Ctx> {
+  const setContext = (key: string, value: unknown) => {
+    written.add(key);
+    ctx.setContext(key as never, value as never);
+  };
+  const merge = (other: ScenarioFlowContext<object>) => {
+    for (const key of Object.keys(other.customContext)) written.add(key);
+    ctx.merge(other);
+  };
+  return new Proxy(ctx, {
+    get(target, prop, receiver) {
+      if (prop === "setContext" || prop === "addContext") return setContext;
+      if (prop === "merge") return merge;
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
+/**
  * Main class for creating and executing test scenarios.
  * Provides a fluent API for building chains of API calls with automatic logging.
  *
@@ -127,6 +176,17 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
   private config: ResolvedScenarioFlowConfig;
   private ctx: ScenarioFlowContext<Ctx>;
   private steps: NamedStep<Ctx>[] = [];
+  /** Set by {@link ScenarioFlow.once}. */
+  private runOnce = false;
+  /**
+   * Result of the single run of a run-once scenario: the values its steps
+   * wrote, as a shallow snapshot. Holds the in-flight promise while the run
+   * is in progress so that concurrent children share it; cleared when the
+   * run fails so that the next child retries.
+   */
+  private onceResult?: Promise<ContextRecord>;
+  /** `true` once {@link ScenarioFlow.onceResult} has resolved. */
+  private onceDone = false;
   /**
    * Type-level marker carrying `Ctx` contravariantly; never assigned at run
    * time (see {@link ScenarioFlowChain.__ctx}).
@@ -169,6 +229,12 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
       this.config = resolveConfig(arg);
       const fetcher = this.createFetcher();
       this.ctx = createCtx(fetcher, this.config);
+      // Opt-in run-level fixture (SF_CONTEXT_FILE, see `sfcli --setup`):
+      // only top-level scenarios load it; children copy their parent's ctx.
+      const fixture = loadContextFixture();
+      if (fixture) {
+        mergeRecord(this.ctx, fixture);
+      }
       return;
     }
 
@@ -177,12 +243,13 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
       // parent's ctx by reference made sibling scenarios leak values into each
       // other and into the parent (#8). The parent's current values are copied
       // as a snapshot; the parent's steps run again inside this scenario's
-      // execute() against this scenario's ctx.
+      // execute() against this scenario's ctx (or once per process, when the
+      // parent is marked with `.once()`).
       this.config = { ...arg.config };
       const fetcher = this.createFetcher();
       this.ctx = createCtx(fetcher, this.config);
       this.ctx.merge(arg.ctx);
-      this.steps = [...arg.steps];
+      this.steps = arg.inheritedSteps() as NamedStep<Ctx>[];
       return;
     }
 
@@ -191,7 +258,12 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     );
   }
 
-  private createFetcher() {
+  /**
+   * Build the `ctx.fetcher` function bound to this scenario's config: it
+   * joins `path` with `apiBaseUrl`, logs request and response, and enforces
+   * `expectStatus` / `throwOnError`.
+   */
+  private createFetcher(): (req: ScenarioFlowRequest) => Promise<Response> {
     return async (req: ScenarioFlowRequest): Promise<Response> => {
       // Strip scenario-flow-only options so only RequestInit reaches fetch()
       const { path, expectStatus, throwOnError = true, ...init } = req;
@@ -248,6 +320,10 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     };
   }
 
+  /**
+   * Join a request path with `apiBaseUrl`, collapsing the slashes between
+   * them.
+   */
   private joinUrl(parts: string): string {
     const clean = [this.config.apiBaseUrl, parts].map((p) =>
       p.replace(/^\/+|\/+$/g, "")
@@ -283,7 +359,7 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     if (nameOrParent instanceof ScenarioFlow) {
       // Step functions only ever receive this scenario's own ctx at run time;
       // the parent's steps are re-typed to this scenario's context.
-      this.steps.push(...(nameOrParent.steps as NamedStep<Ctx>[]));
+      this.steps.push(...(nameOrParent.inheritedSteps() as NamedStep<Ctx>[]));
       this.ctx.merge(nameOrParent.ctx);
       return this as unknown as ScenarioFlowChain<
         InheritedContext<Ctx, Parent>
@@ -291,6 +367,178 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     }
 
     throw new Error("Invalid step arguments");
+  }
+
+  /**
+   * Mark this scenario as run-once.
+   *
+   * By default a parent's steps are copied into every scenario that inherits
+   * it and run again inside each child's `execute()`. After `once()`, a child
+   * instead gets a single synthetic step named `once: <parent name>` that
+   * runs the parent's steps the first time it is reached in the process and,
+   * on every later run (by any child, or by `execute()` on the parent
+   * itself), only merges a shallow snapshot of the values those steps wrote
+   * into the child's context and logs `(cached, skipped)`.
+   *
+   * - The snapshot contains the keys the parent's steps wrote through
+   *   `setContext` / `addContext` / `merge` (same-value writes included) and
+   *   keys whose value changed during the run. Mutating an object the child
+   *   already held in place (`ctx.getContext("user").name = "x"`) is not
+   *   detected and is not carried to other children.
+   * - Children that reach the step while the first run is still in flight
+   *   wait for it and then merge the same snapshot, logging
+   *   `waited for in-flight run` (the run is never duplicated in one
+   *   process).
+   * - A failing run is not cached: the error is rethrown and the next child
+   *   runs the parent's steps again.
+   * - The cache is per parent instance and per process. Separate `deno run`
+   *   processes (one per file under `sfcli`) do not share it; use
+   *   `sfcli --setup` for that.
+   * - Nesting composes: if a run-once grandparent is inherited by the parent,
+   *   the parent's step list contains the grandparent's synthetic step, so
+   *   the grandparent still runs at most once.
+   *
+   * Call `once()` before creating children: a child created earlier keeps a
+   * plain copy of the steps. The synthetic step refers to the parent, so it
+   * runs the parent's step list as it is at execution time.
+   *
+   * @example
+   * ```typescript
+   * const login = new ScenarioFlow<{ token: string }>("Login", config)
+   *   .step("Authenticate", async (ctx) => {
+   *     const res = await ctx.fetcher({ path: "/auth/login", method: "POST" });
+   *     ctx.setContext("token", (await res.json()).token);
+   *   })
+   *   .once();
+   *
+   * const a = login.extend("A").step("a", async (ctx) => {
+   *   console.log(ctx.getContext("token"));
+   * });
+   * const b = login.extend("B").step("b", async (ctx) => {
+   *   console.log(ctx.getContext("token"));
+   * });
+   * await a.execute(); // runs Authenticate
+   * await b.execute(); // merges the cached token; Authenticate is skipped
+   * ```
+   * @returns This scenario for method chaining
+   */
+  once(): this {
+    this.runOnce = true;
+    return this;
+  }
+
+  /**
+   * Steps a child scenario receives when it inherits this scenario: a copy
+   * of the step list, or a single synthetic step when this scenario is
+   * marked with {@link ScenarioFlow.once}.
+   */
+  private inheritedSteps(): NamedStep<Ctx>[] {
+    if (!this.runOnce) {
+      return [...this.steps];
+    }
+    return [{
+      name: `once: ${this.scenarioName}`,
+      fn: (ctx) => this.runOnceInto(ctx, true),
+    }];
+  }
+
+  /**
+   * Run this scenario's steps against `ctx` at most once per process.
+   * Later calls (and concurrent callers) merge the snapshot of the values
+   * written by the first run into `ctx` instead.
+   * @param ctx - Context to run against (a child's, or this scenario's own)
+   * @param nested - `true` when called from inside a child's step: the
+   *   parent's steps are then reported as info lines instead of step blocks
+   */
+  private async runOnceInto(
+    ctx: ScenarioFlowContext<Ctx>,
+    nested: boolean,
+  ): Promise<void> {
+    if (this.onceResult) {
+      const waited = !this.onceDone;
+      const snapshot = await this.onceResult;
+      mergeRecord(ctx, snapshot);
+      logger.logInfo(
+        waited
+          ? `"${this.scenarioName}" waited for in-flight run (shared, skipped)`
+          : `"${this.scenarioName}" already ran (cached, skipped)`,
+      );
+      return;
+    }
+
+    const inFlight = (async () => {
+      // Keep only what the parent's steps wrote, so values a child already
+      // held before the parent ran do not leak into its siblings. Writes
+      // through setContext/addContext/merge are recorded explicitly (this
+      // catches same-value writes); a value diff on top catches direct
+      // assignments to ctx.customContext. In-place mutation of an object the
+      // child inherited is not detected.
+      const written = new Set<string>();
+      const before = { ...(ctx.customContext as ContextRecord) };
+      await this.runStepsInto(recordWrites(ctx, written), nested);
+      const after = ctx.customContext as ContextRecord;
+      const snapshot: ContextRecord = {};
+      for (const [key, value] of Object.entries(after)) {
+        if (written.has(key) || !(key in before) || before[key] !== value) {
+          snapshot[key] = value;
+        }
+      }
+      return snapshot;
+    })();
+    this.onceResult = inFlight;
+
+    try {
+      await inFlight;
+      this.onceDone = true;
+    } catch (error) {
+      if (this.onceResult === inFlight) {
+        this.onceResult = undefined;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Run this scenario's steps in order against `ctx`.
+   * @param ctx - Context passed to every step
+   * @param nested - `true` when running inside another scenario's step (a
+   *   run-once parent): each step is then announced with an info line, and
+   *   errors propagate to the enclosing step, which logs them
+   */
+  private async runStepsInto(
+    ctx: ScenarioFlowContext<Ctx>,
+    nested: boolean,
+  ): Promise<void> {
+    for (const step of this.steps) {
+      if (nested) {
+        logger.logInfo(`"${this.scenarioName}" > ${step.name}`);
+        await step.fn(ctx);
+        continue;
+      }
+
+      logger.startStep(step.name);
+      try {
+        await step.fn(ctx);
+        logger.endStep();
+      } catch (error) {
+        if (error instanceof ScenarioAssertionError) {
+          logger.logAssertionFailure(
+            error.assertionMessage,
+            error.expected,
+            error.actual,
+            error.location,
+            error.source,
+          );
+        } else if (isAssertionError(error)) {
+          // Raw @std/assert AssertionError: expected/actual are not available
+          logger.logAssertionFailure((error as Error).message);
+        } else {
+          logger.logError(`Error in step "${step.name}": ${error}`);
+        }
+        logger.endStep();
+        throw error;
+      }
+    }
   }
 
   /**
@@ -309,33 +557,20 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
     );
   }
 
+  /**
+   * Run the scenario inside a scenario log block (`startScenario` /
+   * `endScenario`). Errors propagate to {@link ScenarioFlow.execute}.
+   */
   private async run(): Promise<void> {
     logger.startScenario(this.scenarioName);
 
     try {
-      for (const step of this.steps) {
-        logger.startStep(step.name);
-        try {
-          await step.fn(this.ctx);
-          logger.endStep();
-        } catch (error) {
-          if (error instanceof ScenarioAssertionError) {
-            logger.logAssertionFailure(
-              error.assertionMessage,
-              error.expected,
-              error.actual,
-              error.location,
-              error.source,
-            );
-          } else if (isAssertionError(error)) {
-            // Raw @std/assert AssertionError: expected/actual are not available
-            logger.logAssertionFailure((error as Error).message);
-          } else {
-            logger.logError(`Error in step "${step.name}": ${error}`);
-          }
-          logger.endStep();
-          throw error;
-        }
+      if (this.runOnce) {
+        // Executing a run-once scenario directly populates (or reuses) the
+        // same cache that its children use.
+        await this.runOnceInto(this.ctx, false);
+      } else {
+        await this.runStepsInto(this.ctx, false);
       }
     } finally {
       logger.endScenario();
@@ -345,11 +580,14 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
   /**
    * Execute all steps in the scenario.
    * Logs the scenario execution and handles errors appropriately.
+   * When `SF_CONTEXT_OUT` is set, the context is written to that file after
+   * a successful run (see `sfcli --setup`).
    * @throws Error if any step fails
    */
   async execute(): Promise<void> {
     try {
       await this.run();
+      writeContextOut(this.ctx.customContext as ContextRecord);
     } catch (error) {
       if (isAssertionError(error)) {
         // Already printed in full inside the step block: keep this to one line

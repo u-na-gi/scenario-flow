@@ -117,6 +117,12 @@ nested objects are shared. The parent's steps run again inside each child's
 `execute()` against that child's context. Scenarios that share a parent never
 leak top-level values into each other or into the parent.
 
+To run a parent chain only once instead, mark it with `.once()`: children then
+run its steps the first time and reuse the resulting context afterwards (within
+one process). Across files, `sfcli --setup <file>` runs one setup file first and
+hands its context to every other file. See
+[Running setup once](./scenario-flow/README.md#running-setup-once).
+
 Without a type argument the context is untyped: any key is accepted and
 `ctx.getContext<T>(key)` returns `T | undefined`. See
 [scenario-flow/README.md](./scenario-flow/README.md) for the full API.
@@ -147,7 +153,20 @@ sfcli -c 4 ./scenarios
 
 # Override apiBaseUrl of every scenario
 sfcli --base-url http://localhost:8080/ ./scenarios
+
+# Run setup.sf.ts once first; its context seeds every other scenario file
+sfcli --setup ./scenarios/setup.sf.ts ./scenarios
 ```
+
+#### Running a setup file once
+
+With `--setup <file>`, `sfcli` runs that file first and alone, saves its context
+(JSON-serializable values such as tokens and ids) to a temporary file via
+`SF_CONTEXT_OUT`, and starts every other scenario file with that context loaded
+via `SF_CONTEXT_FILE`. A failing setup file aborts the run with exit code `1`.
+Inside one process, `parent.once()` gives the same effect for scenarios built on
+a common parent. See
+[Running setup once](./scenario-flow/README.md#running-setup-once) for details.
 
 #### Overriding the base URL
 
@@ -184,6 +203,7 @@ the full resolution rules.
 - ⚡ **`-c, --concurrency <n>`** to run files in parallel without interleaved
   logs
 - 🌐 **`--base-url <url>`** (or `SF_API_BASE_URL`) to override `apiBaseUrl`
+- 🧰 **`--setup <file>`** to run a login/registration chain once per run
 - 🚦 **Exit code** `1` when any scenario fails or no files are found
   (`--allow-empty` to tolerate an empty result)
 - 📊 **Execution summary** and error reporting

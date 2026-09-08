@@ -4,6 +4,10 @@ import { relative, resolve } from "@std/path";
 import { walk } from "@std/fs";
 import { parseArgs } from "@std/cli/parse-args";
 import { logger } from "../scenario-flow/core/logger.ts";
+import {
+  CONTEXT_FILE_ENV_KEY,
+  CONTEXT_OUT_ENV_KEY,
+} from "../scenario-flow/core/fixture.ts";
 
 /**
  * Parsed command-line options.
@@ -15,6 +19,8 @@ export interface CliOptions {
   concurrency: number;
   allowEmpty: boolean;
   baseUrl?: string;
+  /** Scenario file to run first, alone; its context seeds the other files. */
+  setup?: string;
 }
 
 /**
@@ -58,12 +64,24 @@ OPTIONS:
                            (optionally /regex/i) for a regular expression.
       --base-url <url>     Override apiBaseUrl of every scenario by passing
                            SF_API_BASE_URL=<url> to the child processes.
+      --setup <file>       Run <file> (a .sf.ts file) first and alone. Its
+                           context is saved to a temporary JSON file
+                           (SF_CONTEXT_OUT) and loaded as the initial context
+                           of every other scenario file (SF_CONTEXT_FILE), so
+                           a login/registration chain runs once per sfcli run.
+                           If the setup file fails, nothing else runs and
+                           sfcli exits with 1. The setup file is excluded from
+                           the regular run when it is also under PATH.
+                           Only JSON-serializable context values are carried.
+                           sfcli itself needs write access to the OS temp
+                           directory for this (--allow-write=/tmp or $TMPDIR;
+                           an interactive run prompts for exactly that path).
       --allow-empty        Exit with 0 even when no .sf.ts files are found.
 
 EXIT CODE:
   0  all scenario files succeeded
-  1  at least one scenario file failed, a path was invalid, or no
-     .sf.ts files were found (unless --allow-empty)
+  1  at least one scenario file failed, the setup file failed, a path was
+     invalid, or no .sf.ts files were found (unless --allow-empty)
 
 DESCRIPTION:
   Finds all .sf.ts files under the given paths (sorted, de-duplicated) and
@@ -77,6 +95,7 @@ EXAMPLES:
   sfcli --filter '/user|auth/i' .    # Regex filter (case-insensitive)
   sfcli -c 4 ./scenarios             # Run 4 files at a time
   sfcli --base-url http://localhost:8080/ ./scenarios
+  sfcli --setup ./scenarios/setup.sf.ts ./scenarios   # Login once, then run
 `);
 }
 
@@ -88,7 +107,7 @@ export function parseCliArgs(args: string[]): CliOptions {
   const unknownFlags: string[] = [];
   const parsed = parseArgs(args, {
     boolean: ["help", "allow-empty"],
-    string: ["_", "concurrency", "filter", "base-url"],
+    string: ["_", "concurrency", "filter", "base-url", "setup"],
     alias: { h: "help", c: "concurrency" },
     unknown: (arg: string, key?: string) => {
       // Positional arguments (no key) are accepted; unknown flags are not.
@@ -125,6 +144,14 @@ export function parseCliArgs(args: string[]): CliOptions {
   if (parsed["base-url"] === "") {
     throw new Error("--base-url requires a URL");
   }
+  if (parsed.setup === "") {
+    throw new Error("--setup requires a .sf.ts file");
+  }
+  if (parsed.setup !== undefined && !parsed.setup.endsWith(".sf.ts")) {
+    throw new Error(
+      `--setup expects a .sf.ts file (got "${parsed.setup}")`,
+    );
+  }
 
   const paths = parsed._.map(String);
 
@@ -135,6 +162,7 @@ export function parseCliArgs(args: string[]): CliOptions {
     concurrency,
     allowEmpty: parsed["allow-empty"],
     baseUrl: parsed["base-url"],
+    setup: parsed.setup,
   };
 }
 
@@ -224,18 +252,29 @@ export async function collectScenarioFiles(
 }
 
 /**
- * Executes a scenario file with `deno run --allow-net --allow-env`.
+ * Executes a scenario file with `deno run --allow-net --allow-env`
+ * (plus `extraArgs`, e.g. a scoped `--allow-read=<file>`).
  * When `capture` is true, stdout/stderr are buffered and returned instead
  * of being streamed to the terminal.
  */
 async function executeScenarioFile(
   filePath: string,
-  options: { capture: boolean; env: Record<string, string> },
+  options: {
+    capture: boolean;
+    env: Record<string, string>;
+    extraArgs?: string[];
+  },
 ): Promise<ScenarioResult> {
   const startTime = performance.now();
   try {
     const command = new Deno.Command("deno", {
-      args: ["run", "--allow-net", "--allow-env", filePath],
+      args: [
+        "run",
+        "--allow-net",
+        "--allow-env",
+        ...(options.extraArgs ?? []),
+        filePath,
+      ],
       env: options.env,
       stdout: options.capture ? "piped" : "inherit",
       stderr: options.capture ? "piped" : "inherit",
@@ -354,13 +393,28 @@ export async function main(args: string[] = Deno.args): Promise<number> {
     console.error(`❌ ${error}`);
   }
 
+  // The setup file must exist and be a .sf.ts file; it never runs as part of
+  // the regular list, even when it lives under one of the given paths.
+  let setupFile: string | undefined;
+  if (options.setup) {
+    const setup = await collectScenarioFiles([options.setup]);
+    for (const error of setup.errors) {
+      console.error(`❌ --setup: ${error}`);
+    }
+    if (setup.files.length !== 1) {
+      return 1;
+    }
+    setupFile = setup.files[0];
+  }
+
+  const candidates = allFiles.filter((file) => file !== setupFile);
   const scenarioFiles = options.filter
-    ? filterScenarioFiles(allFiles, options.filter)
-    : allFiles;
+    ? filterScenarioFiles(candidates, options.filter)
+    : candidates;
 
   if (options.filter) {
     console.log(
-      `🔎 Filter "${options.filter}" matched ${scenarioFiles.length}/${allFiles.length} files`,
+      `🔎 Filter "${options.filter}" matched ${scenarioFiles.length}/${candidates.length} files`,
     );
   }
 
@@ -387,30 +441,129 @@ export async function main(args: string[] = Deno.args): Promise<number> {
 
   const startTime = performance.now();
 
-  const results = await runWithConcurrency(
-    scenarioFiles,
-    options.concurrency,
-    (file) => {
-      if (!concurrent) console.log(`▶ Running: ${file}`);
-      return executeScenarioFile(file, { capture: concurrent, env });
-    },
-    (result) => {
-      if (concurrent) printBufferedResult(result);
-    },
-  );
+  // --setup: run the setup file alone first. Its context is written to a
+  // temporary JSON file, which the remaining files load as their initial
+  // context. Child processes only get file permissions for that one file.
+  let contextFile: string | undefined;
+  let scenarioArgs: string[] = [];
+  let sigintListener: (() => void) | undefined;
+  try {
+    if (setupFile) {
+      contextFile = await createContextFile();
+      if (contextFile === undefined) {
+        return 1;
+      }
+      // Remove the temp file when the run is interrupted (Ctrl+C); the
+      // `finally` below does not run in that case.
+      const tempFile = contextFile;
+      sigintListener = () => {
+        try {
+          Deno.removeSync(tempFile);
+        } catch {
+          // Already gone; nothing else to clean up.
+        }
+        Deno.exit(130);
+      };
+      try {
+        Deno.addSignalListener("SIGINT", sigintListener);
+      } catch {
+        // Signal listeners are not supported on this platform.
+        sigintListener = undefined;
+      }
+      console.log(`🧰 Setup: ${setupFile}`);
+      console.log(`   context file: ${contextFile}`);
+      const setupResult = await executeScenarioFile(setupFile, {
+        capture: false,
+        env: { ...env, [CONTEXT_OUT_ENV_KEY]: contextFile },
+        extraArgs: [`--allow-write=${contextFile}`],
+      });
+      if (!setupResult.success) {
+        console.log(
+          `\n❌ Setup failed: ${setupFile} (${
+            Math.round(setupResult.durationMs)
+          }ms). No scenario files were run.`,
+        );
+        return 1;
+      }
+      console.log("");
+      scenarioArgs = [`--allow-read=${contextFile}`];
+      env[CONTEXT_FILE_ENV_KEY] = contextFile;
+    }
 
-  const totalDuration = performance.now() - startTime;
-  const successCount = results.filter((r) => r.success).length;
-  const failed = results.filter((r) => !r.success);
+    const results = await runWithConcurrency(
+      scenarioFiles,
+      options.concurrency,
+      (file) => {
+        if (!concurrent) console.log(`▶ Running: ${file}`);
+        return executeScenarioFile(file, {
+          capture: concurrent,
+          env,
+          extraArgs: scenarioArgs,
+        });
+      },
+      (result) => {
+        if (concurrent) printBufferedResult(result);
+      },
+    );
 
-  logger.logExecutionSummary(scenarioFiles.length, successCount, totalDuration);
+    const totalDuration = performance.now() - startTime;
+    const successCount = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success);
 
-  if (failed.length > 0) {
-    console.log("\nFailed files:");
-    failed.forEach((r) => console.log(`  ❌ ${r.file}`));
+    logger.logExecutionSummary(
+      scenarioFiles.length,
+      successCount,
+      totalDuration,
+    );
+
+    if (failed.length > 0) {
+      console.log("\nFailed files:");
+      failed.forEach((r) => console.log(`  ❌ ${r.file}`));
+    }
+
+    return failed.length === 0 && errors.length === 0 ? 0 : 1;
+  } finally {
+    if (sigintListener) {
+      try {
+        Deno.removeSignalListener("SIGINT", sigintListener);
+      } catch {
+        // Not supported on this platform; it was never added.
+      }
+    }
+    if (contextFile) {
+      try {
+        await Deno.remove(contextFile);
+      } catch {
+        // Already gone or not removable; nothing else to clean up.
+      }
+    }
   }
+}
 
-  return failed.length === 0 && errors.length === 0 ? 0 : 1;
+/**
+ * Creates the temporary context file for `--setup` in the OS temp directory.
+ * Deno checks write permission for that directory only, so an interactive
+ * run prompts for exactly that path. Returns `undefined` (after printing a
+ * clear error) when the permission is missing or the file cannot be created.
+ */
+async function createContextFile(): Promise<string | undefined> {
+  try {
+    return await Deno.makeTempFile({
+      prefix: "sfcli-context-",
+      suffix: ".json",
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof Deno.errors.NotCapable) {
+      console.error(
+        `❌ --setup needs write access to the temp directory for its context file: ${message}\n` +
+          `   Run sfcli with --allow-write=<temp dir> (e.g. --allow-write=/tmp or "$TMPDIR").`,
+      );
+    } else {
+      console.error(`❌ --setup: cannot create the context file: ${message}`);
+    }
+    return undefined;
+  }
 }
 
 // Run the main function if this module is executed directly

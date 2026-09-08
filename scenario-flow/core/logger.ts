@@ -234,6 +234,13 @@ export class ScenarioLogger {
   }
 
   /**
+   * Log a warning (something was ignored or skipped; execution continues)
+   */
+  logWarn(message: string): void {
+    console.log(colors.yellow + "  ⚠️  " + message + colors.reset);
+  }
+
+  /**
    * Log success message
    */
   logSuccess(message: string): void {

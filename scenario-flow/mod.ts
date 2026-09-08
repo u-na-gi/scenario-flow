@@ -82,6 +82,12 @@ export {
   type StepInfo,
 } from "./core/logger.ts";
 export {
+  CONTEXT_FILE_ENV_KEY,
+  CONTEXT_OUT_ENV_KEY,
+  isSerializableContextValue,
+  toSerializableContext,
+} from "./core/fixture.ts";
+export {
   describeResponseBody,
   type DescribeResponseBodyOptions,
   type ResponseBodyLog,
