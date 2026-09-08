@@ -13,6 +13,10 @@ modules.
 - **`store.test.ts`** - Tests for the store module
 - **`integration.test.ts`** - Integration tests that test modules working
   together
+- **`status.test.ts`** - Unit tests for the fetcher status-check helpers
+  (`expectStatus` / `throwOnError` decision logic)
+- **`expect-status.test.ts`** - Fetcher tests against a local `Deno.serve`
+  server for `expectStatus` and `throwOnError`
 
 ## Test Coverage
 

@@ -133,6 +133,39 @@ await scenario
   .execute();
 ```
 
+### Verifying Error Responses
+
+By default `ctx.fetcher` throws on any non-2xx status. To assert that an
+endpoint returns a specific error status, pass `expectStatus`; the fetcher then
+throws only when the actual status is not in the expected set and logs
+`✅ 401 Unauthorized (expected 401 / actual 401)`:
+
+```typescript
+await scenario
+  .step("Unauthenticated request is rejected", async (ctx) => {
+    const response = await ctx.fetcher({
+      path: "/tag/filter",
+      expectStatus: 401, // or a list: [400, 422]
+    });
+    const body = await response.json();
+    // assert on body...
+  })
+  .execute();
+// Mismatch throws: "Expected status 401 but got 200 (GET https://api.example.com/tag/filter)"
+```
+
+To never throw and inspect the `Response` yourself, set `throwOnError: false`:
+
+```typescript
+const response = await ctx.fetcher({
+  path: "/maybe-failing",
+  throwOnError: false,
+});
+if (!response.ok) {
+  console.log("Server returned", response.status);
+}
+```
+
 ## License
 
 MIT

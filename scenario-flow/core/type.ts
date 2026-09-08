@@ -13,6 +13,19 @@ export interface ScenarioFlowConfig {
 export interface ScenarioFlowRequest extends RequestInit {
   /** API endpoint path (will be joined with apiBaseUrl) */
   path: string;
+  /**
+   * Expected HTTP status code(s).
+   * When set, the fetcher throws only if the actual status is not in this set
+   * (so a scenario can assert that e.g. `401` is returned).
+   * When omitted, any non-2xx status is treated as an error.
+   */
+  expectStatus?: number | number[];
+  /**
+   * Whether to throw when the response status does not meet the expectation.
+   * Set to `false` to always get the `Response` back and inspect it yourself.
+   * @default true
+   */
+  throwOnError?: boolean;
 }
 
 /**

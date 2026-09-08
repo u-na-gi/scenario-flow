@@ -1,3 +1,5 @@
+import { formatExpectedStatus, isExpectedStatus } from "./status.ts";
+
 // ANSI color codes for terminal output
 const colors = {
   reset: "\x1b[0m",
@@ -160,21 +162,27 @@ export class ScenarioLogger {
   }
 
   /**
-   * Log HTTP response information
+   * Log HTTP response information.
+   * When `expected` is given, the line is marked ✅/❌ by whether `status`
+   * is in the expected set instead of by the 2xx rule.
    */
   logResponse(
     status: number,
     statusText: string,
     duration: number,
     body?: string,
+    expected?: number | number[],
   ): void {
-    const statusColor = status >= 200 && status < 300
-      ? colors.green
-      : colors.red;
-    const statusIcon = status >= 200 && status < 300 ? "✅" : "❌";
+    const matched = isExpectedStatus(status, expected);
+    const statusColor = matched ? colors.green : colors.red;
+    const statusIcon = matched ? "✅" : "❌";
+    const expectation = expected === undefined
+      ? ""
+      : ` (expected ${formatExpectedStatus(expected)} / actual ${status})`;
 
     console.log(
-      statusColor + `  ${statusIcon} ${status} ${statusText}` + colors.reset +
+      statusColor + `  ${statusIcon} ${status} ${statusText}${expectation}` +
+        colors.reset +
         colors.gray + ` (${this.formatDuration(duration)})` + colors.reset,
     );
 
