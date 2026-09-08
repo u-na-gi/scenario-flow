@@ -24,49 +24,92 @@ deno task start [directory]
 
 ## Usage
 
-### Basic Commands
-
-```bash
-# Show help
-sfcli -h
-sfcli --help
-
-# Run all .sf.ts files in current directory
-sfcli .
-
-# Run all .sf.ts files in specified directory
-sfcli ./path/to/scenarios
 ```
+sfcli [OPTIONS] [PATH...]
+```
+
+### Arguments
+
+| Argument  | Description                                                                                                                              |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `PATH...` | One or more files or directories (default: `.`). Directories are searched recursively for `*.sf.ts` files; files must end with `.sf.ts`. |
+
+Shell globs work as expected because they expand to multiple file arguments
+(`sfcli ./scenarios/*.sf.ts`). Duplicate files are run only once and the final
+file list is sorted by path, so execution order is deterministic.
+
+### Options
+
+| Option                  | Description                                                                                                                                                                                   |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-h, --help`            | Show help and exit with 0.                                                                                                                                                                    |
+| `-c, --concurrency <n>` | Run up to `n` scenario files in parallel (default: `1`, sequential). With `n > 1`, each file's stdout/stderr is buffered and printed as one block when that file finishes, so logs never mix. |
+| `--filter <pattern>`    | Only run files whose (absolute) path contains `pattern`. Use `/regex/` or `/regex/i` for a regular-expression match. Only one `--filter` is honoured.                                         |
+| `--base-url <url>`      | Pass `SF_API_BASE_URL=<url>` to every scenario process, which overrides the scenario's `apiBaseUrl`. Setting `SF_API_BASE_URL` in the environment before running `sfcli` works too.           |
+| `--allow-empty`         | Exit with 0 even when no `.sf.ts` files are found.                                                                                                                                            |
+
+### Exit code
+
+| Code | Meaning                                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------------------- |
+| `0`  | All scenario files succeeded (or `--help`, or no files with `--allow-empty`).                                       |
+| `1`  | At least one scenario file failed, a path did not exist / was not a `.sf.ts` file, or no `.sf.ts` files were found. |
 
 ### Examples
 
 ```bash
-# Find and execute all .sf.ts files in the current directory
+# Show help
+sfcli -h
+
+# Run all .sf.ts files in the current directory
 sfcli .
 
-# Find and execute all .sf.ts files in the example directory
-sfcli ../example
+# Run all .sf.ts files in a directory
+sfcli ./path/to/scenarios
 
-# Show help information
-sfcli -h
+# Run a single file, or several files and directories at once
+sfcli ./scenarios/login.sf.ts
+sfcli ./scenarios/*.sf.ts ./more-scenarios
+
+# Only run files whose path contains "login"
+sfcli --filter login ./scenarios
+
+# Regex filter (case-insensitive)
+sfcli --filter '/user|auth/i' ./scenarios
+
+# Run four files at a time; output of each file is printed as one block
+sfcli -c 4 ./scenarios
+
+# Point every scenario at another server
+sfcli --base-url http://localhost:8080/ ./scenarios
+SF_API_BASE_URL=http://localhost:8080/ sfcli ./scenarios
+
+# Do not fail when the directory contains no scenarios
+sfcli --allow-empty ./maybe-empty
 ```
 
 ## What it does
 
 The CLI tool:
 
-1. **Searches recursively** for all files with the `.sf.ts` extension in the
-   specified directory
-2. **Executes each file** using `deno run --allow-net <file>`
-3. **Reports results** showing which files were executed successfully
-4. **Provides summary** of execution results
+1. **Resolves each PATH**: a directory is searched recursively for `.sf.ts`
+   files, a file is used as-is (it must end with `.sf.ts`)
+2. **Sorts and de-duplicates** the file list, then applies `--filter`
+3. **Executes each file** using `deno run --allow-net --allow-env <file>`, up to
+   `--concurrency` files at a time
+4. **Reports results** showing which files were executed successfully and
+   **exits non-zero** if anything failed
 
 ## Features
 
-- ✅ Recursive directory scanning
+- ✅ Recursive directory scanning, single files, multiple paths and globs
+- ✅ Deterministic (sorted) execution order
+- ✅ `--filter` by substring or regular expression
+- ✅ Parallel execution with `--concurrency`, without interleaved logs
+- ✅ `--base-url` / `SF_API_BASE_URL` override for the target server
 - ✅ Automatic network permission (`--allow-net`)
-- ✅ Clear execution feedback
-- ✅ Error handling and reporting
+- ✅ Meaningful exit code for CI
+- ✅ Clear execution feedback, error handling and reporting
 - ✅ Help documentation
 - ✅ Global installation support
 
