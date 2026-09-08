@@ -77,7 +77,7 @@ if (import.meta.main) {
 
 ### Using the CLI
 
-The CLI tool automatically finds and executes all `.sf.ts` files in a directory:
+The CLI tool finds and executes `.sf.ts` files:
 
 ```bash
 # Show help
@@ -88,14 +88,35 @@ sfcli .
 
 # Run all .sf.ts files in specified directory
 sfcli ./scenarios
+
+# Run single files, several paths, or shell globs
+sfcli ./scenarios/login.sf.ts ./other-scenarios
+sfcli ./scenarios/*.sf.ts
+
+# Only run files whose path matches a substring or /regex/
+sfcli --filter login ./scenarios
+
+# Run 4 scenario files in parallel (output is printed per file, never mixed)
+sfcli -c 4 ./scenarios
+
+# Override apiBaseUrl of every scenario
+sfcli --base-url http://localhost:8080/ ./scenarios
 ```
 
 #### CLI Features
 
-- 🔍 **Recursive search** for `.sf.ts` files
-- 🌐 **Automatic network permissions** (`--allow-net`)
+- 🔍 **Recursive search** for `.sf.ts` files, plus single files, multiple paths
+  and globs (sorted, de-duplicated)
+- 🎯 **`--filter`** by substring or `/regex/`
+- ⚡ **`-c, --concurrency <n>`** to run files in parallel without interleaved
+  logs
+- 🌐 **`--base-url <url>`** (or `SF_API_BASE_URL`) to override `apiBaseUrl`
+- 🚦 **Exit code** `1` when any scenario fails or no files are found
+  (`--allow-empty` to tolerate an empty result)
 - 📊 **Execution summary** and error reporting
 - 🛠️ **Easy installation** and global access
+
+See [scenario-flow-cli/README.md](scenario-flow-cli/README.md) for all options.
 
 ## Examples
 
@@ -208,8 +229,9 @@ cd scenario-flow
 # Run all tests
 deno task test
 
-# Run examples
+# Run examples (the sample API server must be running on localhost:3323)
 cd example
+deno task server:start   # in another terminal
 deno task test
 
 # Run CLI tests
