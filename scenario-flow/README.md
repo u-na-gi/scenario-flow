@@ -154,7 +154,9 @@ await scenario
 // Mismatch throws: "Expected status 401 but got 200 (GET https://api.example.com/tag/filter)"
 ```
 
-To never throw and inspect the `Response` yourself, set `throwOnError: false`:
+To never throw and inspect the `Response` yourself, set `throwOnError: false`. A
+mismatching status is then only logged as a red status line; it does not throw
+and does not mark the scenario as failed, so assert on the `Response` yourself:
 
 ```typescript
 const response = await ctx.fetcher({

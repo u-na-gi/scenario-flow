@@ -1,4 +1,8 @@
-import { formatExpectedStatus, isExpectedStatus } from "./status.ts";
+import {
+  type ExpectedStatus,
+  formatExpectedStatus,
+  isExpectedStatus,
+} from "./status.ts";
 
 // ANSI color codes for terminal output
 const colors = {
@@ -171,7 +175,7 @@ export class ScenarioLogger {
     statusText: string,
     duration: number,
     body?: string,
-    expected?: number | number[],
+    expected?: ExpectedStatus,
   ): void {
     const matched = isExpectedStatus(status, expected);
     const statusColor = matched ? colors.green : colors.red;

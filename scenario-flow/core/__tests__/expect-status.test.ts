@@ -84,12 +84,14 @@ Deno.test("expectStatus - list of statuses matches any of them", async () => {
   try {
     const flow = new ScenarioFlow("expectStatus list", { apiBaseUrl: baseUrl });
     const statuses: number[] = [];
+    // `as const` tuples are accepted (readonly number[])
+    const clientErrors = [400, 422] as const;
 
     flow
       .step("400", async (ctx) => {
         const res = await ctx.fetcher({
           path: "/status/400",
-          expectStatus: [400, 422],
+          expectStatus: clientErrors,
         });
         statuses.push(res.status);
       })
@@ -197,6 +199,34 @@ Deno.test("default - non-2xx still throws HTTP error", async () => {
     );
   } finally {
     await server.shutdown();
+  }
+});
+
+Deno.test("expectStatus - empty array is rejected before the request is sent", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = async (): Promise<Response> => {
+    await Promise.resolve();
+    fetchCalled = true;
+    return new Response("ok", { status: 200 });
+  };
+
+  try {
+    const flow = new ScenarioFlow("empty expectStatus", {
+      apiBaseUrl: "https://api.example.com",
+    });
+    flow.step("call", async (ctx) => {
+      await ctx.fetcher({ path: "/x", expectStatus: [] });
+    });
+
+    await assertRejects(
+      () => captureLog(() => flow.execute()),
+      Error,
+      "expectStatus must not be empty",
+    );
+    assertEquals(fetchCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 

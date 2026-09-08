@@ -18,11 +18,16 @@ export interface ScenarioFlowRequest extends RequestInit {
    * When set, the fetcher throws only if the actual status is not in this set
    * (so a scenario can assert that e.g. `401` is returned).
    * When omitted, any non-2xx status is treated as an error.
+   * An empty array is rejected with an error before the request is sent.
    */
-  expectStatus?: number | number[];
+  expectStatus?: number | readonly number[];
   /**
    * Whether to throw when the response status does not meet the expectation.
    * Set to `false` to always get the `Response` back and inspect it yourself.
+   *
+   * With `false`, a mismatch (non-2xx, or a status outside `expectStatus`)
+   * is only logged as a red status line; it does not throw and does not mark
+   * the scenario as failed. Assert on the returned `Response` yourself.
    * @default true
    */
   throwOnError?: boolean;

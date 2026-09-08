@@ -6,7 +6,7 @@ import type {
   ScenarioFlowStepFunction,
 } from "./type.ts";
 import { logger } from "./logger.ts";
-import { formatStatusMismatch, resolveStatusExpectation } from "./status.ts";
+import { formatStatusMismatch, isExpectedStatus } from "./status.ts";
 
 /**
  * Interface for chaining scenario steps together.
@@ -98,6 +98,9 @@ export class ScenarioFlow implements ScenarioFlowChain {
     return async (req: ScenarioFlowRequest): Promise<Response> => {
       // Strip scenario-flow-only options so only RequestInit reaches fetch()
       const { path, expectStatus, throwOnError = true, ...init } = req;
+      if (Array.isArray(expectStatus) && expectStatus.length === 0) {
+        throw new Error("expectStatus must not be empty");
+      }
       const url = this.joinUrl(path);
       const requestStartTime = performance.now();
 
@@ -129,12 +132,7 @@ export class ScenarioFlow implements ScenarioFlowChain {
         expectStatus,
       );
 
-      const verdict = resolveStatusExpectation(
-        response.status,
-        expectStatus,
-        throwOnError,
-      );
-      if (verdict.shouldThrow) {
+      if (throwOnError && !isExpectedStatus(response.status, expectStatus)) {
         const message = formatStatusMismatch(
           response.status,
           expectStatus,

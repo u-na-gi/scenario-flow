@@ -3,18 +3,8 @@
  * @internal
  */
 
-/**
- * Result of evaluating a response status against a request's expectation.
- */
-export interface StatusVerdict {
-  /**
-   * `true` when the status satisfies the expectation:
-   * in `expectStatus` when it is set, otherwise any 2xx status.
-   */
-  matched: boolean;
-  /** `true` when the fetcher should throw (mismatch and `throwOnError`). */
-  shouldThrow: boolean;
-}
+/** Expected status code(s) as accepted by `ScenarioFlowRequest.expectStatus`. */
+export type ExpectedStatus = number | readonly number[];
 
 /**
  * Check whether `status` is in the expected set.
@@ -22,37 +12,21 @@ export interface StatusVerdict {
  */
 export function isExpectedStatus(
   status: number,
-  expectStatus?: number | number[],
+  expectStatus?: ExpectedStatus,
 ): boolean {
   if (expectStatus === undefined) {
     return status >= 200 && status < 300;
   }
-  return Array.isArray(expectStatus)
-    ? expectStatus.includes(status)
-    : expectStatus === status;
-}
-
-/**
- * Decide whether a response status is acceptable and whether to throw.
- *
- * @param status - Actual HTTP status
- * @param expectStatus - Expected status code(s); `undefined` means "any 2xx"
- * @param throwOnError - When `false`, never throw (default `true`)
- */
-export function resolveStatusExpectation(
-  status: number,
-  expectStatus?: number | number[],
-  throwOnError = true,
-): StatusVerdict {
-  const matched = isExpectedStatus(status, expectStatus);
-  return { matched, shouldThrow: !matched && throwOnError };
+  return typeof expectStatus === "number"
+    ? expectStatus === status
+    : expectStatus.includes(status);
 }
 
 /** Format an expectation for log and error messages, e.g. `401` or `400 | 422`. */
-export function formatExpectedStatus(expectStatus: number | number[]): string {
-  return Array.isArray(expectStatus)
-    ? expectStatus.join(" | ")
-    : `${expectStatus}`;
+export function formatExpectedStatus(expectStatus: ExpectedStatus): string {
+  return typeof expectStatus === "number"
+    ? `${expectStatus}`
+    : expectStatus.join(" | ");
 }
 
 /**
@@ -61,7 +35,7 @@ export function formatExpectedStatus(expectStatus: number | number[]): string {
  */
 export function formatStatusMismatch(
   status: number,
-  expectStatus: number | number[] | undefined,
+  expectStatus: ExpectedStatus | undefined,
   method: string,
   url: string,
 ): string {
