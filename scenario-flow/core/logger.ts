@@ -1,3 +1,5 @@
+import { formatAssertValue } from "./assert.ts";
+
 // ANSI color codes for terminal output
 const colors = {
   reset: "\x1b[0m",
@@ -206,6 +208,37 @@ export class ScenarioLogger {
    */
   logError(message: string): void {
     console.log(colors.red + "  ❌ " + message + colors.reset);
+    if (this.currentScenario) {
+      this.currentScenario.success = false;
+    }
+  }
+
+  /**
+   * Log an assertion failure inside the current step block.
+   * Expected/actual lines are printed unless both are undefined
+   * (e.g. a raw `@std/assert` AssertionError where they are unknown).
+   */
+  logAssertionFailure(
+    message: string,
+    expected?: unknown,
+    actual?: unknown,
+    location?: string,
+  ): void {
+    const where = location ? colors.gray + ` (at ${location})` : "";
+    console.log(
+      colors.red + colors.bright + "  ❌ ASSERTION FAILED: " + colors.reset +
+        colors.red + message + colors.reset + where + colors.reset,
+    );
+    if (expected !== undefined || actual !== undefined) {
+      console.log(
+        colors.green + "     expected: " + formatAssertValue(expected) +
+          colors.reset,
+      );
+      console.log(
+        colors.red + "     actual:   " + formatAssertValue(actual) +
+          colors.reset,
+      );
+    }
     if (this.currentScenario) {
       this.currentScenario.success = false;
     }

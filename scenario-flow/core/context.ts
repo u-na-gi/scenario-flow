@@ -1,4 +1,5 @@
 import type { ScenarioFlowConfig, ScenarioFlowRequest } from "./type.ts";
+import { assert, type ScenarioAssert } from "./assert.ts";
 
 /**
  * Context object passed to each scenario step.
@@ -31,6 +32,12 @@ export interface ScenarioFlowContext {
    * @returns The configuration object
    */
   getConfig(): ScenarioFlowConfig;
+  /**
+   * Assertion helpers. Failures throw `ScenarioAssertionError` and are
+   * printed with expected/actual values inside the step log.
+   * @example ctx.assert.equal(res.status, 200, "login succeeds");
+   */
+  assert: ScenarioAssert;
 }
 
 class ScenarioFlowContextImple implements ScenarioFlowContext {
@@ -62,6 +69,8 @@ class ScenarioFlowContextImple implements ScenarioFlowContext {
   merge(ctx: ScenarioFlowContext) {
     this.customContext = { ...this.customContext, ...ctx.customContext };
   }
+
+  assert: ScenarioAssert = assert;
 }
 
 /**

@@ -48,3 +48,4 @@ export * from "./core/index.ts";
 export * from "./core/context.ts";
 export * from "./core/type.ts";
 export * from "./core/logger.ts";
+export * from "./core/assert.ts";

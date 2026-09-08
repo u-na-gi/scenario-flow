@@ -6,6 +6,7 @@ import type {
   ScenarioFlowStepFunction,
 } from "./type.ts";
 import { logger } from "./logger.ts";
+import { isAssertionError, ScenarioAssertionError } from "./assert.ts";
 
 /**
  * Interface for chaining scenario steps together.
@@ -182,7 +183,19 @@ export class ScenarioFlow implements ScenarioFlowChain {
           await step.fn(this.ctx);
           logger.endStep();
         } catch (error) {
-          logger.logError(`Error in step "${step.name}": ${error}`);
+          if (error instanceof ScenarioAssertionError) {
+            logger.logAssertionFailure(
+              error.assertionMessage,
+              error.expected,
+              error.actual,
+              error.location,
+            );
+          } else if (isAssertionError(error)) {
+            // Raw @std/assert AssertionError: expected/actual are not available
+            logger.logAssertionFailure((error as Error).message);
+          } else {
+            logger.logError(`Error in step "${step.name}": ${error}`);
+          }
           logger.endStep();
           throw error;
         }

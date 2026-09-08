@@ -99,6 +99,40 @@ The context object passed to each step provides:
 - `addContext(key, value)`: Store data for later steps
 - `getContext<T>(key)`: Retrieve stored data
 - `getConfig()`: Get the scenario configuration
+- `assert`: Assertion helpers (see [Assertions](#assertions))
+
+### Assertions
+
+`ctx.assert` provides thin wrappers over `@std/assert`. On failure the step log
+shows the expected and actual values (plus the call site), and the step throws a
+`ScenarioAssertionError` carrying `expected`, `actual` and `message`.
+
+```typescript
+await scenario
+  .step("save tag filter", async (ctx) => {
+    const res = await ctx.fetcher({ path: "/tag-filter", method: "PUT" });
+    ctx.assert.status(res, 200);
+
+    const response = await res.json();
+    ctx.assert.equal(response.success, true, "save tag filter");
+    ctx.assert.deepEqual(response.tagIds, [createdTag.tagId]);
+  })
+  .execute();
+```
+
+Failure output inside the step block:
+
+```
+❌ ASSERTION FAILED: save tag filter (at ./scenario/tag-filter.sf.ts:42:7)
+   expected: [ "abc" ]
+   actual:   [ "abc", "def" ]
+```
+
+Available helpers: `equal` / `deepEqual`, `strictEqual`, `notEqual`, `ok`,
+`exists`, `match`, `objectMatch`, `status(res, 200 | [200, 201])`, `fail`. The
+same helpers are exported as `assert` from the package for use outside a step.
+Raw `@std/assert` failures thrown inside a step are also reported as
+`ASSERTION FAILED` (without expected/actual values).
 
 ## Advanced Usage
 
