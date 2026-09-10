@@ -3,7 +3,7 @@ import { login } from "./login.sf.ts";
 
 const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
   .step("Search with query parameters", async (ctx) => {
-    const token = ctx.getContext<string>("token");
+    const token = ctx.getContext("token");
     if (!token) {
       throw new Error("Token not found");
     }
@@ -18,7 +18,7 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
 
     if (res.ok) {
       const data = await res.json();
-      console.log("検索結果:", data);
+      console.log("Search results:", data);
 
       // Validate response structure
       if (data.query !== "test") {
@@ -34,13 +34,13 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
         throw new Error("Expected results to be an array");
       }
 
-      console.log("クエリパラメータテスト成功");
+      console.log("Query parameter test passed");
     } else {
       throw new Error(`Search request failed with status: ${res.status}`);
     }
   })
   .step("Search with different parameters", async (ctx) => {
-    const token = ctx.getContext<string>("token");
+    const token = ctx.getContext("token");
     if (!token) {
       throw new Error("Token not found");
     }
@@ -55,14 +55,14 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
 
     if (res.ok) {
       const data = await res.json();
-      console.log("2回目の検索結果:", data);
+      console.log("Second search results:", data);
 
       // Validate that limit is respected
       if (data.results.length > 2) {
         throw new Error(`Expected max 2 results, got ${data.results.length}`);
       }
 
-      console.log("異なるパラメータでのテスト成功");
+      console.log("Test with different parameters passed");
     } else {
       throw new Error(
         `Second search request failed with status: ${res.status}`,
@@ -70,7 +70,7 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
     }
   })
   .step("Search without query parameter", async (ctx) => {
-    const token = ctx.getContext<string>("token");
+    const token = ctx.getContext("token");
     if (!token) {
       throw new Error("Token not found");
     }
@@ -85,7 +85,7 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
 
     if (res.ok) {
       const data = await res.json();
-      console.log("パラメータなしの検索結果:", data);
+      console.log("Search results without parameters:", data);
 
       // Should use default values
       if (data.query !== "") {
@@ -100,7 +100,7 @@ const searchWithQuery = new ScenarioFlow("Search with Query Parameters", login)
         );
       }
 
-      console.log("デフォルト値テスト成功");
+      console.log("Default value test passed");
     } else {
       throw new Error(
         `Default search request failed with status: ${res.status}`,

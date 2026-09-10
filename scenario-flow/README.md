@@ -8,7 +8,8 @@ fluent API for building and executing API test scenarios.
 - 🔗 **Fluent API**: Chain multiple steps together for readable test scenarios
 - 📝 **Built-in Logging**: Automatic request/response logging with timing
 - 🔧 **Context Management**: Share data between steps with built-in context
-- 🚀 **TypeScript Support**: Full type safety with TypeScript
+- 🚀 **TypeScript Support**: Full type safety with TypeScript, including typed
+  scenario context
 - 🌐 **HTTP Client**: Built-in fetch-based HTTP client with error handling
 
 ## Installation
@@ -45,10 +46,10 @@ await scenario
     });
 
     const data = await response.json();
-    ctx.addContext("authToken", data.token);
+    ctx.setContext("authToken", data.token);
   })
   .step("Get user profile", async (ctx) => {
-    const token = ctx.getContext<string>("authToken");
+    const token = ctx.getContext<string>("authToken"); // string | undefined
 
     const response = await ctx.fetcher({
       path: "/user/profile",
@@ -63,6 +64,79 @@ await scenario
   .execute();
 ```
 
+## Typed Context
+
+Declare the shape of the context once per scenario and `setContext` /
+`getContext` become fully typed: keys are checked and `getContext` returns the
+declared value type (no `as` casts needed).
+
+```typescript
+type LoginCtx = {
+  token: string;
+  userId: number;
+};
+
+export const login = new ScenarioFlow<LoginCtx>("Login", config)
+  .step("Authenticate", async (ctx) => {
+    const res = await ctx.fetcher({ path: "/auth/login", method: "POST" });
+    const data = await res.json();
+
+    ctx.setContext("token", data.token); // value must be a string
+    ctx.setContext("userId", data.id);
+    // ctx.setContext("token", 123);     // compile error: wrong value type
+    // ctx.getContext("typo");           // compile error: unknown key
+  });
+```
+
+### Inheriting a parent scenario
+
+| Form                                                | Resulting context type            |
+| --------------------------------------------------- | --------------------------------- |
+| `new ScenarioFlow("child", login)`                  | `LoginCtx` (inferred from parent) |
+| `login.extend<Own>("child")`                        | `LoginCtx & Own`                  |
+| `new ScenarioFlow<LoginCtx & Own>("child", login)`  | `LoginCtx & Own` (as declared)    |
+| `new ScenarioFlow<Own>("main", config).step(login)` | chain typed as `Own & LoginCtx`   |
+
+```typescript
+type GetDataCtx = { items: string[] };
+
+// Parent's steps run first; the child sees the parent's keys and its own.
+const getData = login.extend<GetDataCtx>("Get data")
+  .step("Fetch", async (ctx) => {
+    const token = ctx.getContext("token"); // string | undefined
+    const res = await ctx.fetcher({
+      path: "/api/data",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    ctx.setContext("items", await res.json());
+  });
+
+await getData.execute();
+```
+
+When the context type is declared explicitly
+(`new ScenarioFlow<Ctx>("child", parent)`), `Ctx` must extend the parent's
+context type: `ParentCtx & Own` and `ParentCtx` are accepted, a conflicting,
+unrelated or narrower `Ctx` is a compile error, and an untyped parent accepts
+any `Ctx`.
+
+**Inheriting copies the context; it is never shared.** A child scenario gets its
+own context object and its own copy of the config. The copy is a **shallow
+snapshot taken at construction**: top-level values the parent holds at that
+moment are copied, but nested objects are not cloned, so a nested object stored
+by the parent is shared between the parent and all of its children (values are
+not deep-cloned because they may not be cloneable). The parent's steps run again
+inside each child's `execute()` against that child's context, so two children of
+the same parent (e.g. many scenarios built on `login`) never see each other's
+top-level values, and children never write into the parent's context.
+
+An untyped scenario (no type argument) behaves like `Record<string, unknown>`:
+any key is allowed, `getContext(key)` returns `unknown` and `getContext<T>(key)`
+returns `T | undefined`. Combining a typed and an untyped scenario keeps the
+typed side (`InheritedContext<Parent, Own>`). For gradual migration, an untyped
+`ScenarioFlowStepFunction` is still accepted by `.step()` on a typed chain; such
+a step does not get key checking.
+
 ## API Reference
 
 ### ScenarioFlow
@@ -72,20 +146,40 @@ The main class for creating and executing test scenarios.
 #### Constructor
 
 ```typescript
-new ScenarioFlow(name: string, config: ScenarioFlowConfig)
+new ScenarioFlow<Ctx = Record<string, unknown>>(name: string, config: ScenarioFlowConfig)
+new ScenarioFlow(name: string, parent: ScenarioFlowChain<Ctx>)   // Ctx inferred from parent
+new ScenarioFlow<Ctx>(name: string, parent: ScenarioFlowChain)   // Ctx as declared
 ```
 
 - `name`: A descriptive name for the scenario
-- `config`: Configuration object containing `apiBaseUrl`
+- `config`: Configuration object containing `apiBaseUrl` (a string, a
+  `() => string`, or `{ default, envKey? }` — see
+  [Overriding the base URL](#overriding-the-base-url))
+- `parent`: Another scenario whose steps and context are inherited
 
 #### Methods
 
-##### `.step(name: string, fn: ScenarioFlowStepFunction): ScenarioFlowChain`
+##### `.step(name: string, fn: ScenarioFlowStepFunction<Ctx>): ScenarioFlowChain<Ctx>`
 
 Add a step to the scenario.
 
 - `name`: Step name for logging
 - `fn`: Async function that receives the context
+
+##### `.step(parent: ScenarioFlowChain<Parent>): ScenarioFlowChain<Ctx & Parent>`
+
+Append another scenario's steps to this one.
+
+##### `.extend<Own>(name: string): ScenarioFlow<Ctx & Own>`
+
+Create a new scenario that inherits this scenario's steps and context and adds
+its own context keys.
+
+##### `.once(): this`
+
+Mark the scenario as run-once: scenarios that inherit it run its steps at most
+once per process and reuse the resulting context afterwards. See
+[Running setup once](#running-setup-once).
 
 ##### `.execute(): Promise<void>`
 
@@ -93,12 +187,53 @@ Execute all steps in the scenario.
 
 ### Context Methods
 
-The context object passed to each step provides:
+The context object (`ScenarioFlowContext<Ctx>`) passed to each step provides:
 
 - `fetcher(request)`: Make HTTP requests
-- `addContext(key, value)`: Store data for later steps
-- `getContext<T>(key)`: Retrieve stored data
-- `getConfig()`: Get the scenario configuration
+- `setContext(key, value)`: Store data for later steps (typed by `Ctx`)
+- `getContext(key)`: Retrieve stored data as `Ctx[key] | undefined`
+- `getContext<T>(key)`: Retrieve stored data as `T | undefined`
+- `getConfig()`: Get the scenario configuration (`apiBaseUrl` is always a
+  resolved `string` here)
+- `addContext(key, value)`: Deprecated alias of `setContext`
+- `assert`: Assertion helpers (see [Assertions](#assertions))
+
+### Assertions
+
+`ctx.assert` provides thin wrappers over `@std/assert`. On failure the step log
+shows the expected and actual values (plus the call site), and the step throws a
+`ScenarioAssertionError` carrying `expected`, `actual` and `message`.
+
+```typescript
+await scenario
+  .step("save tag filter", async (ctx) => {
+    const res = await ctx.fetcher({ path: "/tag-filter", method: "PUT" });
+    ctx.assert.status(res, 200);
+
+    const response = await res.json();
+    ctx.assert.equal(response.success, true, "save tag filter");
+    ctx.assert.deepEqual(response.tagIds, [createdTag.tagId]);
+  })
+  .execute();
+```
+
+Failure output inside the step block:
+
+```
+❌ ASSERTION FAILED: save tag filter (at ./scenario/tag-filter.sf.ts:42:7)
+   expected: [ "abc" ]
+   actual:   [ "abc", "def" ]
+```
+
+Available helpers: `equal` / `deepEqual`, `strictEqual`, `notEqual`, `ok`,
+`exists`, `match`, `objectMatch`, `status(res, 200 | [200, 201])`, `fail`. The
+same helpers are exported as `assert` from the package for use outside a step.
+Raw `@std/assert` failures thrown inside a step are also reported as
+`ASSERTION FAILED` (without expected/actual values).
+
+Note: `ok` and `exists` use TypeScript assertion signatures, so call them
+through a stable reference (`ctx.assert.ok(value)`); destructuring
+(`const { assert } = ctx; assert.ok(value)`) defeats type narrowing (TS2775).
 
 ## Advanced Usage
 
@@ -117,6 +252,158 @@ const mainScenario = new ScenarioFlow("Main Flow", config)
   });
 ```
 
+### Running setup once
+
+Inheriting a parent (`new ScenarioFlow(name, parent)`, `parent.extend(name)`,
+`.step(parent)`) copies the parent's steps, so a chain such as
+`registerUser → login → ...` runs again inside **every** scenario built on it: a
+test suite with 23 files registers 23 users. That default is kept (it is the
+right thing for scenarios that must be independent). Two opt-in mechanisms let
+you run such a chain only once.
+
+#### `parent.once()` — memoize within one process
+
+```typescript
+export const login = new ScenarioFlow<LoginCtx>("Login", config)
+  .step("Register", async (ctx) => {
+    /* POST /users */
+  })
+  .step("Authenticate", async (ctx) => {
+    /* POST /auth/login, ctx.setContext("token", ...) */
+  })
+  .once();
+
+const listTags = login.extend("List tags").step("list", async (ctx) => {
+  /* uses ctx.getContext("token") */
+});
+const createTag = login.extend("Create tag").step("create", async (ctx) => {
+  /* uses ctx.getContext("token") */
+});
+
+await listTags.execute(); // runs Register and Authenticate
+await createTag.execute(); // reuses the token; Register/Authenticate skipped
+```
+
+Instead of copying the parent's steps, a child of a run-once parent gets one
+synthetic step named `once: <parent name>`:
+
+- The first time that step runs in the process, the parent's steps run in order
+  against the child's context (each reported as an info line, e.g.
+  `"Login" > Authenticate`, inside the `once: Login` step block). A shallow
+  snapshot of the values those steps wrote is cached on the parent instance.
+- "Wrote" means: keys passed to `setContext` / `addContext` / `merge` during the
+  run (a write of the same value counts), plus keys whose value changed. Values
+  are not cloned. Mutating an object the child already held **in place**
+  (`ctx.getContext("user").name = "x"`) is not detected and does not reach the
+  other children.
+- Every later run — by another child, or by `execute()` on the parent itself —
+  merges that snapshot into the context and logs
+  `"Login" already ran (cached, skipped)`.
+- Children that reach the step while the first run is still in flight (e.g.
+  `Promise.all` over several scenarios) wait for it and share its result,
+  logging `"Login" waited for in-flight run (shared, skipped)`; the parent never
+  runs twice in one process.
+- A failing run is not cached: the error propagates, and the next child runs the
+  parent's steps again.
+- Nesting composes: with `register.once()` inherited by `login`, `login`'s step
+  list contains `once: Register`, so the grandparent still runs at most once,
+  whether or not `login` itself is marked `.once()`.
+- Calling `parent.execute()` directly before the children also populates the
+  cache, and a second direct `execute()` is skipped as well.
+
+The cache lives in the process, keyed by the parent instance: separate
+`deno run` processes (one per file under `sfcli`) do not share it. For that, use
+`sfcli --setup`.
+
+#### `sfcli --setup <file>` — run-level fixture across processes
+
+```bash
+sfcli --setup ./scenario-test/setup.sf.ts ./scenario-test
+```
+
+`sfcli` runs the setup file first and alone, then the remaining files (the setup
+file is excluded from the regular list when it is also under the given paths).
+If the setup file fails, nothing else runs and `sfcli` exits with `1`. The
+handover goes through two environment variables that the library understands:
+
+| Variable                 | Effect                                                                                                                                                                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SF_CONTEXT_OUT=<path>`  | After every successful `execute()`, the scenario's context is written to `<path>` as JSON. Scenarios executed later in the same process add to (and override) the same file, so a setup file may execute a chain of several scenarios. |
+| `SF_CONTEXT_FILE=<path>` | Every top-level `ScenarioFlow` (one created with a config, not from a parent) loads the JSON object in `<path>` into its initial context at construction. Values written by steps override the fixture values.                         |
+
+`sfcli --setup` sets `SF_CONTEXT_OUT` to a temporary file for the setup process
+and `SF_CONTEXT_FILE` for all other processes, then deletes the file at the end.
+Child processes get file permissions for that one file only
+(`--allow-write=<file>` / `--allow-read=<file>`).
+
+**Only JSON-serializable values survive** the file: strings, numbers, booleans,
+`null`, arrays, plain objects and objects with `toJSON` (such as `Date`).
+Functions, `Response` objects, `Map`/`Set`, bigints and symbols are dropped
+(inside arrays they become `null`). Tokens, ids and small records are fine.
+
+Without `sfcli`, the same variables work with plain `deno run`:
+
+```bash
+SF_CONTEXT_OUT=./ctx.json deno run --allow-net --allow-env --allow-write=./ctx.json setup.sf.ts
+SF_CONTEXT_FILE=./ctx.json deno run --allow-net --allow-env --allow-read=./ctx.json list-tags.sf.ts
+```
+
+Reading the variables requires `--allow-env`; without it they are silently
+ignored. When the file permission is missing or the file cannot be used (not
+found, invalid JSON, not an object), the library logs a warning once and
+continues as if the variable were unset. Nothing throws and no permission prompt
+is triggered.
+
+The two mechanisms combine: mark `login` with `.once()` for the files that
+execute several scenarios built on it, and use `--setup` to run it once per
+`sfcli` run.
+
+### Overriding the base URL
+
+The `apiBaseUrl` written in a scenario is a default. It can be overridden at run
+time so the same scenarios can target a local server, staging, or production
+without editing them:
+
+```bash
+# via environment variable
+SF_API_BASE_URL=https://staging.example.com sfcli ./scenario-test
+
+# via the CLI flag (sets SF_API_BASE_URL for the scenario processes)
+sfcli --base-url https://staging.example.com ./scenario-test
+```
+
+`apiBaseUrl` accepts three forms:
+
+```typescript
+// 1. string — used as-is unless SF_API_BASE_URL is set
+new ScenarioFlow("A", { apiBaseUrl: "http://localhost:3000" });
+
+// 2. function — called once when the scenario is constructed
+new ScenarioFlow("B", { apiBaseUrl: () => computeBaseUrl() });
+
+// 3. object — `default` unless the env var named by `envKey` is set
+new ScenarioFlow("C", {
+  apiBaseUrl: { default: "http://localhost:3000", envKey: "MY_API_URL" },
+});
+```
+
+Resolution rules:
+
+- Resolution happens once, in the `ScenarioFlow` constructor. `ctx.getConfig()`
+  always returns the resolved `string`.
+- Precedence: the environment variable (`envKey`, default `SF_API_BASE_URL`)
+  when it is set and non-empty, then the configured value (string / function
+  result / `default`). The function is not called when the env override applies.
+- An empty environment variable is treated as unset.
+- Reading the environment requires `--allow-env` (at least
+  `--allow-env=SF_API_BASE_URL`). Without it the override is silently ignored
+  and the configured value is used; no permission prompt is triggered and no
+  error is thrown.
+- When an override is applied, `apiBaseUrl overridden by SF_API_BASE_URL: ...`
+  is logged once per process (not once per scenario).
+- Scenarios built from another scenario (`new ScenarioFlow(name, parent)`)
+  inherit the parent's already resolved config.
+
 ### Error Handling
 
 Scenarios automatically handle HTTP errors and provide detailed logging:
@@ -127,11 +414,74 @@ await scenario
     try {
       await ctx.fetcher({ path: "/invalid-endpoint" });
     } catch (error) {
-      console.log("Caught expected error:", error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      console.log("Caught expected error:", message);
     }
   })
   .execute();
 ```
+
+### Verifying Error Responses
+
+By default `ctx.fetcher` throws on any non-2xx status. To assert that an
+endpoint returns a specific error status, pass `expectStatus`; the fetcher then
+throws only when the actual status is not in the expected set and logs
+`✅ 401 Unauthorized (expected 401 / actual 401)`:
+
+```typescript
+await scenario
+  .step("Unauthenticated request is rejected", async (ctx) => {
+    const response = await ctx.fetcher({
+      path: "/tag/filter",
+      expectStatus: 401, // or a list: [400, 422]
+    });
+    const body = await response.json();
+    // assert on body...
+  })
+  .execute();
+// Mismatch throws: "Expected status 401 but got 200 (GET https://api.example.com/tag/filter)"
+```
+
+To never throw and inspect the `Response` yourself, set `throwOnError: false`. A
+mismatching status is then only logged as a red status line; it does not throw
+and does not mark the scenario as failed, so assert on the `Response` yourself:
+
+```typescript
+const response = await ctx.fetcher({
+  path: "/maybe-failing",
+  throwOnError: false,
+});
+if (!response.ok) {
+  console.log("Server returned", response.status);
+}
+```
+
+### Logging
+
+Every `ctx.fetcher()` call logs the request and response, including a preview of
+the response body (truncated to 300 characters).
+
+Binary responses (`application/octet-stream`, `application/x-protobuf`,
+`image/*`, `audio/*`, `video/*`, `application/pdf`, `application/zip`, ...) are
+never printed raw. They are summarized instead:
+
+```
+📥 [Binary Data] (123 bytes, application/octet-stream)
+```
+
+When the `Content-Type` header is missing or unknown, the first bytes are
+sniffed: control characters or invalid UTF-8 mean binary.
+
+Set `SF_LOG_BINARY=hex` to also print a hex dump of the first 64 bytes:
+
+```bash
+SF_LOG_BINARY=hex deno run --allow-net --allow-env scenario.ts
+# 📥 [Binary Data] (123 bytes, application/x-protobuf)
+# 📥 hex: 0a 05 68 65 6c 6c 6f 10 01 ...
+```
+
+Reading the variable requires `--allow-env`; without it the hex dump is simply
+disabled (no error, no prompt).
 
 ## License
 

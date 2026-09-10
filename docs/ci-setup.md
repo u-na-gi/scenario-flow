@@ -17,10 +17,10 @@ The workflow includes three main jobs:
 
 #### Test Job
 
-- **Matrix Strategy**: Tests against multiple Deno versions (1.40.x, 1.41.x,
-  latest)
+- **Matrix Strategy**: Runs against Deno `latest` only (the matrix has a single
+  entry; add versions to `deno-version` in `test.yml` to widen it)
 - **Code Quality**: Runs formatting checks and linting
-- **Core Tests**: Executes 41 unit tests for scenario-flow/core with coverage
+- **Core Tests**: Runs the scenario-flow/core test suite with coverage
 - **CLI Tests**: Tests the command-line interface functionality
 - **Coverage**: Generates and uploads coverage reports to Codecov
 
@@ -36,12 +36,12 @@ The workflow includes three main jobs:
 
 ### 2. Project Configuration (`deno.json`)
 
-#### Tasks
+#### Workspace
 
-- `test:core` - Run core library tests with coverage
-- `test:cli` - Run CLI tests
-- `test:coverage` - Generate coverage reports
-- `ci` - Complete CI pipeline (format check + lint + tests)
+The root `deno.json` only declares the workspace members (`scenario-flow`,
+`scenario-flow-cli`, `example`); it defines no tasks. Tests are run with the
+commands listed under [Running Tests Locally](#running-tests-locally); the CLI
+member defines `deno task test`.
 
 #### Linting Configuration
 
@@ -64,14 +64,11 @@ The workflow includes three main jobs:
 - **index.ts**: 97.1% line coverage, 94.4% branch coverage
 - **store.ts**: 100% coverage
 
-### Test Suite Statistics
+### Test Suite
 
-- **41 total tests** across 5 test files
-- **8 context tests** - ScenarioFlowContext functionality
-- **13 index tests** - Main ScenarioFlow class
-- **11 type tests** - Type definitions and interfaces
-- **4 store tests** - Store module functionality
-- **5 integration tests** - End-to-end scenarios
+- Library tests live in `scenario-flow/core/__tests__/*.test.ts` (see the README
+  there for the file list and the permission-gating convention)
+- CLI tests live in `scenario-flow-cli/main_test.ts`
 
 ## Running Tests Locally
 
@@ -84,18 +81,21 @@ curl -fsSL https://deno.land/install.sh | sh
 
 ### Commands
 
+Run from the repository root:
+
 ```bash
-# Run complete CI pipeline locally
-deno task ci
-
-# Run individual test suites
-deno task test:core      # Core library tests
-deno task test:cli       # CLI tests
-deno task test:coverage  # Generate coverage report
-
 # Code quality checks
-deno task fmt:check      # Check formatting
-deno task lint          # Run linter
+deno fmt --check
+deno lint
+
+# Core library tests (add --coverage=coverage for a coverage report)
+cd scenario-flow && deno test --allow-net --allow-read --allow-env
+
+# CLI tests
+cd scenario-flow-cli && deno task test
+
+# Type-check the public API and the example scenarios
+deno check scenario-flow/mod.ts example/scenario/*.sf.ts
 ```
 
 ## CI Status Badges
@@ -129,14 +129,90 @@ The project README includes status badges for:
 
 ### Manual Triggers
 
-- Can be triggered manually from GitHub Actions tab
-- Useful for testing CI changes
+- `test.yml` has no `workflow_dispatch` trigger; it cannot be started manually.
+  Push to a branch or open a PR against `main`/`develop` instead.
+- `publish.yml` has `workflow_dispatch` (owner only, see below) in addition to
+  `v*` tag pushes.
+
+## CI
+
+### Owner-only gating
+
+The repository is public, but GitHub Actions is intended to run only for the
+repository owner. Every job in `test.yml` carries this guard:
+
+```yaml
+if: >-
+  github.actor == github.repository_owner &&
+  github.triggering_actor == github.repository_owner &&
+  (github.event_name != 'pull_request' ||
+  github.event.pull_request.head.repo.full_name == github.repository)
+```
+
+`publish.yml` has no `pull_request` trigger, so its job uses only the first two
+clauses:
+
+```yaml
+if: >-
+  github.actor == github.repository_owner &&
+  github.triggering_actor == github.repository_owner
+```
+
+- Pushes, tag pushes and `workflow_dispatch` runs triggered by anyone other than
+  the owner are skipped (every job is a no-op).
+- `triggering_actor` also covers **Re-run jobs**: a future collaborator cannot
+  re-run an owner-triggered workflow.
+- Pull requests are additionally required to originate from a branch of this
+  repository. A PR opened from a fork does not run any job, so fork code never
+  executes with this repository's context.
+- By design, CI is also skipped for bot-authored PRs (e.g. Dependabot, whose
+  actor is `dependabot[bot]`) and for pushes by a collaborator onto the owner's
+  PR branch. The owner must push (or re-run) to get a CI result in those cases.
+
+Further hardening applied in the workflow files:
+
+- Top-level `permissions: contents: read`; only the `publish` job adds
+  `id-token: write` (OIDC for JSR, so no long-lived publish token is stored).
+- `pull_request_target` is never used.
+- Steps do not print environment variables (`env`, `printenv`, `set -x`) and no
+  `SF_*` variable is set in CI; tests only talk to `localhost`.
+- The Codecov upload receives `secrets.CODECOV_TOKEN` on that step only, with
+  `fail_ci_if_error: false`. Since codecov-action v4, token-less uploads work
+  only for fork PRs, so owner pushes need the token; if the secret is not set
+  the upload is skipped and the pipeline still passes.
+- Every third-party action is pinned to a full commit SHA with the version in a
+  trailing comment. When upgrading, resolve the new SHA and update the comment.
+- `concurrency` groups cancel superseded test runs; publish runs are serialised
+  but never cancelled mid-flight.
+
+### Repository settings (owner action, not in code)
+
+These settings cannot be expressed in the workflow files and must be applied by
+the owner in the GitHub UI:
+
+1. **Settings → Actions → General → Approval for running fork pull request
+   workflows from contributors**: select **Require approval for all external
+   contributors**.
+2. **Settings → Actions → General → Workflow permissions**: select **Read
+   repository contents and packages permissions** (and leave "Allow GitHub
+   Actions to create and approve pull requests" unchecked).
+3. **Settings → Rules → Rulesets → New tag ruleset**: target `v*`; enable
+   **Restrict creations**, **Restrict updates** and **Restrict deletions**; add
+   **Repository admin** to the bypass list so only the owner can create release
+   tags. This is what actually protects `publish.yml`, because the workflow runs
+   on `v*` tag pushes.
+4. **Settings → Secrets and variables → Actions**: add the `CODECOV_TOKEN`
+   repository secret (from the Codecov project settings). Without it the
+   coverage upload is skipped; CI still passes.
+5. Keep other repository secrets minimal. JSR publishing uses OIDC, so no
+   publish token is required.
 
 ## Best Practices
 
 ### For Contributors
 
-1. **Run CI locally** before pushing: `deno task ci`
+1. **Run the checks locally** before pushing (see
+   [Running Tests Locally](#running-tests-locally))
 2. **Maintain test coverage** above current thresholds
 3. **Follow formatting rules** enforced by CI
 4. **Add tests** for new functionality

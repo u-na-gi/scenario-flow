@@ -1,6 +1,11 @@
 import { ScenarioFlow } from "../../scenario-flow/mod.ts";
 
-export const login = new ScenarioFlow("User Login", {
+/** Context produced by the login scenario. */
+export type LoginCtx = {
+  token: string;
+};
+
+export const login = new ScenarioFlow<LoginCtx>("User Login", {
   apiBaseUrl: "http://localhost:3323/",
 }).step("Exec Login", async (ctx) => {
   const res = await ctx.fetcher(
@@ -19,7 +24,7 @@ export const login = new ScenarioFlow("User Login", {
 
   if (res.ok) {
     const data = await res.json();
-    ctx.addContext("token", data.token);
+    ctx.setContext("token", data.token);
   }
 });
 

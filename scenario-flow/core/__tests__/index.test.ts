@@ -8,7 +8,7 @@ const createMockFetch = (mockResponse?: Response, shouldThrow = false) => {
     _url: string | URL | Request,
     _init?: RequestInit,
   ): Promise<Response> => {
-    await Promise.resolve(); // 意味のない await
+    await Promise.resolve(); // no-op await to keep the function async
     if (shouldThrow) {
       throw new Error("Network error");
     }
@@ -55,8 +55,8 @@ Deno.test("ScenarioFlow - step method with function", () => {
   const scenarioFlow = new ScenarioFlow("test-scenario", config);
 
   const stepFunction: ScenarioFlowStepFunction = async (ctx) => {
-    await Promise.resolve(); // 意味のない await
-    ctx.addContext("test", "value");
+    await Promise.resolve(); // no-op await to keep the function async
+    ctx.setContext("test", "value");
   };
 
   const result = scenarioFlow.step("test-step", stepFunction);
@@ -72,8 +72,8 @@ Deno.test("ScenarioFlow - step method with ScenarioFlowChain", () => {
   const flow2 = new ScenarioFlow("flow2", config);
 
   const stepFunction: ScenarioFlowStepFunction = async (ctx) => {
-    await Promise.resolve(); // 意味のない await
-    ctx.addContext("test", "value");
+    await Promise.resolve(); // no-op await to keep the function async
+    ctx.setContext("test", "value");
   };
 
   flow2.step("test-step", stepFunction);
@@ -96,9 +96,9 @@ Deno.test("ScenarioFlow - execute method runs steps successfully", async () => {
     let stepExecuted = false;
 
     const stepFunction: ScenarioFlowStepFunction = async (ctx) => {
-      await Promise.resolve(); // 意味のない await
+      await Promise.resolve(); // no-op await to keep the function async
       stepExecuted = true;
-      ctx.addContext("executed", true);
+      ctx.setContext("executed", true);
     };
 
     scenarioFlow.step("test-step", stepFunction);
@@ -123,7 +123,7 @@ Deno.test("ScenarioFlow - execute method handles step errors", async () => {
     const scenarioFlow = new ScenarioFlow("test-scenario", config);
 
     const errorStepFunction: ScenarioFlowStepFunction = async (_ctx) => {
-      await Promise.resolve(); // 意味のない await
+      await Promise.resolve(); // no-op await to keep the function async
       throw new Error("Step execution failed");
     };
 
@@ -153,21 +153,21 @@ Deno.test("ScenarioFlow - multiple steps execute in order", async () => {
     const executionOrder: number[] = [];
 
     const step1: ScenarioFlowStepFunction = async (ctx) => {
-      await Promise.resolve(); // 意味のない await
+      await Promise.resolve(); // no-op await to keep the function async
       executionOrder.push(1);
-      ctx.addContext("step1", "executed");
+      ctx.setContext("step1", "executed");
     };
 
     const step2: ScenarioFlowStepFunction = async (ctx) => {
-      await Promise.resolve(); // 意味のない await
+      await Promise.resolve(); // no-op await to keep the function async
       executionOrder.push(2);
-      ctx.addContext("step2", "executed");
+      ctx.setContext("step2", "executed");
     };
 
     const step3: ScenarioFlowStepFunction = async (ctx) => {
-      await Promise.resolve(); // 意味のない await
+      await Promise.resolve(); // no-op await to keep the function async
       executionOrder.push(3);
-      ctx.addContext("step3", "executed");
+      ctx.setContext("step3", "executed");
     };
 
     scenarioFlow
@@ -191,7 +191,7 @@ Deno.test("ScenarioFlow - URL joining works correctly", async () => {
     url: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
-    await Promise.resolve(); // 意味のない await
+    await Promise.resolve(); // no-op await to keep the function async
     console.log("Mock fetch called with URL:", url);
     console.log("Mock fetch called with request:", init);
     capturedUrl = url.toString();
@@ -266,7 +266,7 @@ Deno.test("ScenarioFlow - fetcher handles HTTP errors", async () => {
     url: string | URL | Request,
   ): Promise<Response> => {
     console.log("Mock fetch called with URL:", url);
-    await Promise.resolve(); // 意味のない await
+    await Promise.resolve(); // no-op await to keep the function async
     return new Response("Not Found", { status: 404 });
   };
 
@@ -306,13 +306,13 @@ Deno.test("ScenarioFlow - chaining ScenarioFlow copies steps", () => {
   const flow2 = new ScenarioFlow("", config);
 
   const step1: ScenarioFlowStepFunction = async (ctx) => {
-    await Promise.resolve(); // 意味のない await
-    ctx.addContext("step1", "executed");
+    await Promise.resolve(); // no-op await to keep the function async
+    ctx.setContext("step1", "executed");
   };
 
   const step2: ScenarioFlowStepFunction = async (ctx) => {
-    await Promise.resolve(); // 意味のない await
-    ctx.addContext("step2", "executed");
+    await Promise.resolve(); // no-op await to keep the function async
+    ctx.setContext("step2", "executed");
   };
 
   flow1.step("", step1);
@@ -340,13 +340,13 @@ Deno.test("ScenarioFlow - context merging in step chaining", async () => {
     const flow2 = new ScenarioFlow("", config);
 
     const step1: ScenarioFlowStepFunction = async (ctx) => {
-      await Promise.resolve(); // 意味のない await
-      ctx.addContext("flow1", "data");
+      await Promise.resolve(); // no-op await to keep the function async
+      ctx.setContext("flow1", "data");
     };
 
     const step2: ScenarioFlowStepFunction = async (ctx): Promise<void> => {
-      await Promise.resolve(); // 意味のない await
-      ctx.addContext("flow2", "data");
+      await Promise.resolve(); // no-op await to keep the function async
+      ctx.setContext("flow2", "data");
     };
 
     flow1.step("", step1);

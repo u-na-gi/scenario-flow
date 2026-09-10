@@ -1,7 +1,12 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { ScenarioFlow, type ScenarioFlowStepFunction } from "../index.ts";
-import type { ScenarioFlowConfig, ScenarioFlowRequest } from "../type.ts";
+import type {
+  ResolvedScenarioFlowConfig,
+  ScenarioFlowConfig,
+  ScenarioFlowRequest,
+} from "../type.ts";
 import { createCtx } from "../context.ts";
+import { permissionTestOptions } from "./permissions.ts";
 
 Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
   // Mock fetch globally for this test
@@ -65,8 +70,8 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
       const response = await ctx.fetcher(request);
       const loginData = await response.json();
 
-      ctx.addContext("authToken", loginData.token);
-      ctx.addContext("userId", loginData.userId);
+      ctx.setContext("authToken", loginData.token);
+      ctx.setContext("userId", loginData.userId);
     };
 
     // Step 2: Get user profile
@@ -86,7 +91,7 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
       const response = await ctx.fetcher(request);
       const userData = await response.json();
 
-      ctx.addContext("userProfile", userData);
+      ctx.setContext("userProfile", userData);
     };
 
     // Step 3: Get user data
@@ -105,7 +110,7 @@ Deno.test("Integration - ScenarioFlow with real-like workflow", async () => {
       const response = await ctx.fetcher(request);
       const data = await response.json();
 
-      ctx.addContext("userData", data);
+      ctx.setContext("userData", data);
     };
 
     // Chain the steps
@@ -155,8 +160,8 @@ Deno.test("Integration - ScenarioFlow chaining with context sharing", async () =
     const flow1 = new ScenarioFlow("", config);
     const step1: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
-      ctx.addContext("flow1Data", "data from flow 1");
-      ctx.addContext("shared", "original value");
+      ctx.setContext("flow1Data", "data from flow 1");
+      ctx.setContext("shared", "original value");
     };
     flow1.step("", step1);
 
@@ -164,8 +169,8 @@ Deno.test("Integration - ScenarioFlow chaining with context sharing", async () =
     const flow2 = new ScenarioFlow("", config);
     const step2: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
-      ctx.addContext("flow2Data", "data from flow 2");
-      ctx.addContext("shared", "overwritten value");
+      ctx.setContext("flow2Data", "data from flow 2");
+      ctx.setContext("shared", "overwritten value");
     };
     flow2.step("", step2);
 
@@ -180,7 +185,7 @@ Deno.test("Integration - ScenarioFlow chaining with context sharing", async () =
       const flow2Data = ctx.getContext("flow2Data");
       const sharedData = ctx.getContext("shared");
 
-      ctx.addContext("verification", {
+      ctx.setContext("verification", {
         hasFlow1Data: flow1Data === "data from flow 1",
         hasFlow2Data: flow2Data === "data from flow 2",
         sharedOverwritten: sharedData === "overwritten value",
@@ -229,7 +234,7 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
         method: "GET",
       };
       await ctx.fetcher(request);
-      ctx.addContext("step1", "completed");
+      ctx.setContext("step1", "completed");
     };
 
     const step2: ScenarioFlowStepFunction = async (ctx) => {
@@ -238,13 +243,13 @@ Deno.test("Integration - Error handling in complex scenario", async () => {
         method: "GET",
       };
       await ctx.fetcher(request); // This will fail
-      ctx.addContext("step2", "completed");
+      ctx.setContext("step2", "completed");
     };
 
     const step3: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
       // This should not execute due to step2 failure
-      ctx.addContext("step3", "completed");
+      ctx.setContext("step3", "completed");
     };
 
     scenarioFlow
@@ -284,14 +289,14 @@ Deno.test("Integration - Context isolation between different ScenarioFlow instan
 
     const step1: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
-      ctx.addContext("flowId", "flow1");
-      ctx.addContext("data", "flow1 data");
+      ctx.setContext("flowId", "flow1");
+      ctx.setContext("data", "flow1 data");
     };
 
     const step2: ScenarioFlowStepFunction = async (ctx) => {
       await Promise.resolve(); // Simulate async operation
-      ctx.addContext("flowId", "flow2");
-      ctx.addContext("data", "flow2 data");
+      ctx.setContext("flowId", "flow2");
+      ctx.setContext("data", "flow2 data");
     };
 
     flow1.step("", step1);
@@ -310,7 +315,7 @@ Deno.test("Integration - Context isolation between different ScenarioFlow instan
 });
 
 Deno.test("Integration - createCtx function with ScenarioFlow", async () => {
-  const config: ScenarioFlowConfig = {
+  const config: ResolvedScenarioFlowConfig = {
     apiBaseUrl: "https://api.example.com",
   };
 
@@ -333,4 +338,193 @@ Deno.test("Integration - createCtx function with ScenarioFlow", async () => {
 
   assertEquals(data.test, "data");
   assertEquals(ctx.getConfig().apiBaseUrl, "https://api.example.com");
+});
+
+/**
+ * Run `fn` while capturing console.log output. Returns captured lines.
+ */
+async function captureConsoleLog(
+  fn: () => Promise<void>,
+): Promise<string[]> {
+  const originalLog = console.log;
+  const lines: string[] = [];
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+  };
+  try {
+    await fn();
+  } finally {
+    console.log = originalLog;
+  }
+  return lines;
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    Deno.env.delete(name);
+  } else {
+    Deno.env.set(name, value);
+  }
+}
+
+// These tests need a real local server and the SF_LOG_BINARY variable; they
+// are ignored when `deno test` runs without --allow-net / --allow-env.
+const binaryLogTestOptions = permissionTestOptions({
+  net: true,
+  env: ["SF_LOG_BINARY"],
+});
+
+Deno.test({
+  name:
+    "Integration - binary (octet-stream) response is logged as [Binary Data]",
+  ...binaryLogTestOptions,
+}, async () => {
+  // Protobuf-like payload with control bytes and invalid UTF-8
+  const payload = new Uint8Array([
+    0x0a,
+    0x05,
+    0x68,
+    0x65,
+    0x6c,
+    0x6c,
+    0x6f,
+    0x10,
+    0x01,
+    0x1a,
+    0x03,
+    0xff,
+    0xfe,
+    0xfd,
+    0x00,
+    0x07,
+  ]);
+  const garbled = new TextDecoder().decode(payload);
+
+  const originalEnv = Deno.env.get("SF_LOG_BINARY");
+  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+    const url = new URL(req.url);
+    if (url.pathname === "/proto") {
+      return new Response(payload, {
+        status: 200,
+        headers: { "Content-Type": "application/x-protobuf" },
+      });
+    }
+    if (url.pathname === "/blob") {
+      return new Response(payload, {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+    }
+    if (url.pathname === "/untyped") {
+      // No Content-Type at all: must be detected by sniffing
+      return new Response(payload, { status: 200 });
+    }
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  try {
+    Deno.env.delete("SF_LOG_BINARY");
+    const config: ScenarioFlowConfig = {
+      apiBaseUrl: `http://127.0.0.1:${server.addr.port}`,
+    };
+
+    let received: Uint8Array | undefined;
+    const scenarioFlow = new ScenarioFlow("binary-log", config)
+      .step("protobuf", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/proto" });
+        // The original response must still be readable by the step
+        received = new Uint8Array(await response.arrayBuffer());
+      })
+      .step("octet-stream", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/blob" });
+        await response.arrayBuffer();
+      })
+      .step("untyped", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/untyped" });
+        await response.arrayBuffer();
+      })
+      .step("json", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/json" });
+        await response.json();
+      });
+
+    const lines = await captureConsoleLog(() => scenarioFlow.execute());
+    const output = lines.join("\n");
+
+    assertEquals(received, payload);
+
+    assertStringIncludes(
+      output,
+      `📥 [Binary Data] (${payload.length} bytes, application/x-protobuf)`,
+    );
+    assertStringIncludes(
+      output,
+      `📥 [Binary Data] (${payload.length} bytes, application/octet-stream)`,
+    );
+    assertStringIncludes(output, `📥 [Binary Data] (${payload.length} bytes)`);
+    assertEquals(lines.filter((l) => l.includes("[Binary Data]")).length, 3);
+
+    // Raw bytes must never be printed, and no hex dump without SF_LOG_BINARY
+    assertEquals(output.includes(garbled), false);
+    assertEquals(output.includes("📥 hex:"), false);
+
+    // JSON is still logged as text
+    assertStringIncludes(output, '📥 {"ok":true}');
+  } finally {
+    restoreEnv("SF_LOG_BINARY", originalEnv);
+    await server.shutdown();
+  }
+});
+
+Deno.test({
+  name: "Integration - SF_LOG_BINARY=hex adds a hex dump of the first 64 bytes",
+  ...binaryLogTestOptions,
+}, async () => {
+  const payload = new Uint8Array(100).map((_, i) => (i * 7 + 3) & 0xff);
+  payload[0] = 0x0a;
+  payload[1] = 0x1b;
+
+  const originalEnv = Deno.env.get("SF_LOG_BINARY");
+  const server = Deno.serve(
+    { port: 0, onListen() {} },
+    () =>
+      new Response(payload, {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      }),
+  );
+
+  try {
+    Deno.env.set("SF_LOG_BINARY", "hex");
+    const config: ScenarioFlowConfig = {
+      apiBaseUrl: `http://127.0.0.1:${server.addr.port}`,
+    };
+
+    const scenarioFlow = new ScenarioFlow("binary-hex", config)
+      .step("download", async (ctx) => {
+        const response = await ctx.fetcher({ path: "/file.bin" });
+        await response.arrayBuffer();
+      });
+
+    const lines = await captureConsoleLog(() => scenarioFlow.execute());
+    const hexLine = lines.find((l) => l.includes("📥 hex:"));
+    assertEquals(hexLine !== undefined, true);
+
+    const expectedHex = Array.from(
+      payload.subarray(0, 64),
+      (b) => b.toString(16).padStart(2, "0"),
+    ).join(" ");
+    assertStringIncludes(hexLine as string, `📥 hex: ${expectedHex} ...`);
+    assertStringIncludes(hexLine as string, "📥 hex: 0a 1b ");
+    assertStringIncludes(
+      lines.join("\n"),
+      "📥 [Binary Data] (100 bytes, application/octet-stream)",
+    );
+  } finally {
+    restoreEnv("SF_LOG_BINARY", originalEnv);
+    await server.shutdown();
+  }
 });
