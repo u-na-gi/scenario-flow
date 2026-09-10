@@ -172,9 +172,15 @@ export function parseCliArgs(args: string[]): CliOptions {
  * anything else as a plain substring match.
  */
 export function buildFilter(pattern: string): (path: string) => boolean {
-  const regexMatch = pattern.match(/^\/(.+)\/([a-z]*)$/);
+  const regexMatch = pattern.match(/^\/(.+)\/([dgimsuvy]*)$/);
   if (regexMatch) {
-    const regex = new RegExp(regexMatch[1], regexMatch[2]);
+    let regex: RegExp;
+    try {
+      regex = new RegExp(regexMatch[1], regexMatch[2]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`invalid regular expression ${pattern}: ${message}`);
+    }
     return (path) => regex.test(path);
   }
   return (path) => path.includes(pattern);
@@ -280,7 +286,14 @@ async function executeScenarioFile(
       stderr: options.capture ? "piped" : "inherit",
     });
 
-    const output = await command.output();
+    const child = command.spawn();
+    runningChildren.add(child);
+    let output: Deno.CommandOutput;
+    try {
+      output = await child.output();
+    } finally {
+      runningChildren.delete(child);
+    }
     const decoder = new TextDecoder();
 
     return {
@@ -302,6 +315,21 @@ async function executeScenarioFile(
         : undefined,
     };
   }
+}
+
+/** Child processes currently running; killed when sfcli is interrupted. */
+const runningChildren = new Set<Deno.ChildProcess>();
+
+/** Terminates every running child process (best effort). */
+function killRunningChildren(): void {
+  for (const child of runningChildren) {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // Already exited.
+    }
+  }
+  runningChildren.clear();
 }
 
 /**
@@ -336,7 +364,12 @@ function printBufferedResult(result: ScenarioResult): void {
   }
   if (body.length > 0 && !body.endsWith("\n")) body += "\n";
   const target = result.success ? Deno.stdout : Deno.stderr;
-  writeAllSync(target, new TextEncoder().encode(header + body));
+  try {
+    writeAllSync(target, new TextEncoder().encode(header + body));
+  } catch (error: unknown) {
+    // The reader went away (e.g. `sfcli | head`); the run itself is fine.
+    if (!(error instanceof Deno.errors.BrokenPipe)) throw error;
+  }
 }
 
 /**
@@ -402,15 +435,27 @@ export async function main(args: string[] = Deno.args): Promise<number> {
       console.error(`❌ --setup: ${error}`);
     }
     if (setup.files.length !== 1) {
+      if (setup.errors.length === 0) {
+        console.error(
+          `❌ --setup: expected exactly one .sf.ts file, found ${setup.files.length}: ${options.setup}`,
+        );
+      }
       return 1;
     }
     setupFile = setup.files[0];
   }
 
   const candidates = allFiles.filter((file) => file !== setupFile);
-  const scenarioFiles = options.filter
-    ? filterScenarioFiles(candidates, options.filter)
-    : candidates;
+  let scenarioFiles: string[];
+  try {
+    scenarioFiles = options.filter
+      ? filterScenarioFiles(candidates, options.filter)
+      : candidates;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`❌ --filter: ${message}`);
+    return 1;
+  }
 
   if (options.filter) {
     console.log(
@@ -446,29 +491,30 @@ export async function main(args: string[] = Deno.args): Promise<number> {
   // context. Child processes only get file permissions for that one file.
   let contextFile: string | undefined;
   let scenarioArgs: string[] = [];
-  let sigintListener: (() => void) | undefined;
+  // On Ctrl+C the `finally` below does not run: stop the child processes and
+  // remove the temp context file (if any) here, then exit with 130.
+  let sigintListener: (() => void) | undefined = () => {
+    killRunningChildren();
+    if (contextFile) {
+      try {
+        Deno.removeSync(contextFile);
+      } catch {
+        // Already gone; nothing else to clean up.
+      }
+    }
+    Deno.exit(130);
+  };
+  try {
+    Deno.addSignalListener("SIGINT", sigintListener);
+  } catch {
+    // Signal listeners are not supported on this platform.
+    sigintListener = undefined;
+  }
   try {
     if (setupFile) {
       contextFile = await createContextFile();
       if (contextFile === undefined) {
         return 1;
-      }
-      // Remove the temp file when the run is interrupted (Ctrl+C); the
-      // `finally` below does not run in that case.
-      const tempFile = contextFile;
-      sigintListener = () => {
-        try {
-          Deno.removeSync(tempFile);
-        } catch {
-          // Already gone; nothing else to clean up.
-        }
-        Deno.exit(130);
-      };
-      try {
-        Deno.addSignalListener("SIGINT", sigintListener);
-      } catch {
-        // Signal listeners are not supported on this platform.
-        sigintListener = undefined;
       }
       console.log(`🧰 Setup: ${setupFile}`);
       console.log(`   context file: ${contextFile}`);

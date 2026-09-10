@@ -485,3 +485,13 @@ Deno.test("collectScenarioFiles returns sorted, de-duplicated absolute paths", a
     undefined,
   );
 });
+
+Deno.test("buildFilter rejects an invalid regular expression with a clear error", () => {
+  assertThrows(() => buildFilter("/[/"), Error, "invalid regular expression");
+});
+
+Deno.test("buildFilter treats /.../ with non-flag letters as a substring", () => {
+  const matches = buildFilter("/scenarios/auth");
+  assertEquals(matches("x/scenarios/auth/login.sf.ts"), true);
+  assertEquals(matches("x/scenarios/login.sf.ts"), false);
+});

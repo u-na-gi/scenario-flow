@@ -592,7 +592,8 @@ export class ScenarioFlow<Ctx extends object = ContextRecord>
       if (isAssertionError(error)) {
         // Already printed in full inside the step block: keep this to one line
         const e = error as Error & { assertionMessage?: string };
-        const summary = e.assertionMessage ?? e.message.split("\n")[0];
+        const message = typeof e.message === "string" ? e.message : String(e);
+        const summary = e.assertionMessage ?? message.split("\n")[0];
         logger.logError(
           `Error in scenario "${this.scenarioName}": ${e.name}: ${summary}`,
         );
